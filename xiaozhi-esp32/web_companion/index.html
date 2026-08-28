@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Xiaozhi Dual-Eye AI Companion Portal</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #07090e;
+      --bg-secondary: #0d121d;
+      --bg-card: rgba(18, 24, 38, 0.7);
+      --bg-card-hover: rgba(28, 38, 60, 0.85);
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(56, 189, 248, 0.35);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-cyan: #38bdf8;
+      --accent-blue: #3b82f6;
+      --accent-purple: #a855f7;
+      --accent-pink: #ec4899;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --glow-cyan: 0 0 25px rgba(56, 189, 248, 0.35);
+      --glow-blue: 0 0 30px rgba(59, 130, 246, 0.3);
+      --radius-sm: 8px;
+      --radius-md: 14px;
+      --radius-lg: 20px;
+      --radius-full: 9999px;
+      --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 15% 15%, rgba(56, 189, 248, 0.07) 0%, transparent 40%),
+        radial-gradient(circle at 85% 85%, rgba(168, 85, 247, 0.07) 0%, transparent 45%),
+        radial-gradient(circle at 50% 50%, rgba(15, 23, 42, 0.6) 0%, transparent 80%);
+    }
+
+    /* Top Navigation Bar */
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 1rem 2rem;
+      background: rgba(7, 9, 14, 0.85);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-subtle);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: var(--glow-cyan);
+    }
+
+    .brand-icon svg {
+      width: 20px;
+      height: 20px;
+      fill: white;
+    }
+
+    .brand-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      background: linear-gradient(to right, #fff, #94a3b8);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.4rem 0.85rem;
+      border-radius: var(--radius-full);
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      font-size: 0.8rem;
+      font-weight: 600;
+      color: var(--accent-emerald);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: var(--accent-emerald);
+      box-shadow: 0 0 10px var(--accent-emerald);
+      animation: pulse 2s infinite ease-in-out;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* Main Container */
+    main {
+      flex: 1;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 2rem;
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 2rem;
+    }
+
+    @media (max-width: 1024px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    /* Card Panels */
+    .panel {
+      background: var(--bg-card);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-lg);
+      padding: 1.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .panel:hover {
+      border-color: rgba(255, 255, 255, 0.14);
+      background: var(--bg-card-hover);
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .panel-title {
+      font-size: 1.15rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+    }
+
+    /* Eye Avatar Stage */
+    .avatar-stage {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+      background: radial-gradient(circle at center, rgba(30, 41, 59, 0.7) 0%, rgba(10, 15, 26, 0.95) 100%);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--border-subtle);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .eyes-container {
+      display: flex;
+      gap: 2.5rem;
+      margin-bottom: 1.5rem;
+      position: relative;
+      z-index: 2;
+    }
+
+    .eye-socket {
+      width: 180px;
+      height: 180px;
+      border-radius: 50%;
+      background: #000;
+      border: 4px solid #1e293b;
+      box-shadow: inset 0 0 20px rgba(0,0,0,0.9), 0 0 35px rgba(56, 189, 248, 0.2);
+      overflow: hidden;
+      position: relative;
+      cursor: crosshair;
+    }
+
+    canvas.eye-canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .avatar-controls {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.6rem;
+      justify-content: center;
+      width: 100%;
+      z-index: 2;
+    }
+
+    .btn {
+      font-family: var(--font-sans);
+      font-size: 0.85rem;
+      font-weight: 500;
+      padding: 0.55rem 1.1rem;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border-subtle);
+      background: rgba(30, 41, 59, 0.6);
+      color: var(--text-primary);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s ease;
+    }
+
+    .btn:hover {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+      transform: translateY(-1px);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-blue));
+      border: none;
+      color: white;
+      font-weight: 600;
+      box-shadow: 0 4px 14px rgba(56, 189, 248, 0.3);
+    }
+
+    .btn-primary:hover {
+      box-shadow: 0 6px 20px rgba(56, 189, 248, 0.5);
+      transform: translateY(-1px);
+      color: white;
+    }
+
+    /* Presets Grid */
+    .presets-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+      gap: 0.6rem;
+    }
+
+    .preset-pill {
+      padding: 0.5rem 0.75rem;
+      border-radius: var(--radius-sm);
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--border-subtle);
+      font-size: 0.8rem;
+      font-weight: 500;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .preset-pill:hover, .preset-pill.active {
+      border-color: var(--accent-cyan);
+      background: rgba(56, 189, 248, 0.12);
+      color: var(--accent-cyan);
+    }
+
+    /* Tabs & Content */
+    .tabs-nav {
+      display: flex;
+      border-bottom: 1px solid var(--border-subtle);
+      gap: 1.5rem;
+    }
+
+    .tab-btn {
+      background: none;
+      border: none;
+      padding: 0.75rem 0;
+      font-family: var(--font-sans);
+      font-size: 0.95rem;
+      font-weight: 600;
+      color: var(--text-secondary);
+      cursor: pointer;
+      position: relative;
+      transition: color 0.2s;
+    }
+
+    .tab-btn.active {
+      color: var(--accent-cyan);
+    }
+
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1px;
+      left: 0;
+      width: 100%;
+      height: 2px;
+      background: var(--accent-cyan);
+      box-shadow: 0 0 8px var(--accent-cyan);
+    }
+
+    .tab-pane {
+      display: none;
+      flex-direction: column;
+      gap: 1rem;
+    }
+
+    .tab-pane.active {
+      display: flex;
+    }
+
+    /* Soul Memory Explorer */
+    .memory-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      max-height: 280px;
+      overflow-y: auto;
+    }
+
+    .memory-item {
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 0.85rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      transition: border-color 0.2s;
+    }
+
+    .memory-item:hover {
+      border-color: rgba(56, 189, 248, 0.3);
+    }
+
+    .memory-key {
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: var(--accent-cyan);
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .memory-val {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      line-height: 1.4;
+    }
+
+    /* Notes Workspace */
+    .notes-textarea {
+      width: 100%;
+      height: 180px;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      padding: 0.85rem;
+      resize: vertical;
+      outline: none;
+    }
+
+    .notes-textarea:focus {
+      border-color: var(--accent-cyan);
+    }
+
+    /* OTA & Telemetry Cards */
+    .telemetry-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+    }
+
+    .telemetry-card {
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--border-subtle);
+      border-radius: var(--radius-sm);
+      padding: 0.85rem;
+    }
+
+    .telemetry-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+
+    .telemetry-value {
+      font-family: var(--font-mono);
+      font-size: 1rem;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    /* Voice / Conversation Visualizer */
+    .audio-visualizer {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      background: rgba(15, 23, 42, 0.6);
+      border-radius: var(--radius-sm);
+      padding: 0 1rem;
+    }
+
+    .audio-bar {
+      width: 4px;
+      height: 8px;
+      background: var(--accent-cyan);
+      border-radius: 2px;
+      transition: height 0.1s ease;
+    }
+
+    /* Chat Messages */
+    .chat-box {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      max-height: 220px;
+      overflow-y: auto;
+      padding-right: 0.5rem;
+    }
+
+    .chat-bubble {
+      padding: 0.65rem 0.95rem;
+      border-radius: var(--radius-sm);
+      font-size: 0.85rem;
+      max-width: 85%;
+      line-height: 1.4;
+    }
+
+    .chat-user {
+      align-self: flex-end;
+      background: linear-gradient(135deg, var(--accent-blue), var(--accent-purple));
+      color: white;
+    }
+
+    .chat-bot {
+      align-self: flex-start;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-primary);
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+      </div>
+      <div>
+        <div class="brand-title">Xiaozhi Companion Portal</div>
+        <div style="font-size: 0.75rem; color: var(--text-muted);">Embodied Dual-Eye Visual & Persona Workspace</div>
+      </div>
+    </div>
+
+    <div class="status-badge" id="connStatus">
+      <div class="status-dot"></div>
+      <span id="connText">OTA Bridge Online (192.168.88.221:3232)</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- Left Column: Eye Avatar & Kinetics Simulator -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">
+          <span>✨ Lifelike Kinetic Eye Avatar</span>
+        </div>
+        <div style="font-size: 0.8rem; color: var(--accent-cyan); font-family: var(--font-mono);">
+          50 FPS | Direct DMA Emulation
+        </div>
+      </div>
+
+      <div class="avatar-stage">
+        <div class="eyes-container">
+          <div class="eye-socket">
+            <canvas id="leftEyeCanvas" class="eye-canvas" width="240" height="240"></canvas>
+          </div>
+          <div class="eye-socket">
+            <canvas id="rightEyeCanvas" class="eye-canvas" width="240" height="240"></canvas>
+          </div>
+        </div>
+
+        <div class="avatar-controls">
+          <button class="btn" id="btnBlink">😉 Trigger Blink</button>
+          <button class="btn" id="btnCurious">🤔 Curious</button>
+          <button class="btn" id="btnHappy">😊 Happy</button>
+          <button class="btn" id="btnSleepy">😴 Sleepy</button>
+          <button class="btn" id="btnResetGaze">🎯 Center Gaze</button>
+        </div>
+      </div>
+
+      <div>
+        <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary); margin-bottom: 0.6rem;">
+          Select Photorealistic Eye Style (10 Authentic Presets):
+        </div>
+        <div class="presets-grid" id="presetsGrid">
+          <div class="preset-pill active" data-preset="0">Human Blue</div>
+          <div class="preset-pill" data-preset="1">Cat Yellow</div>
+          <div class="preset-pill" data-preset="2">Dragon Fire</div>
+          <div class="preset-pill" data-preset="3">Cyborg Red</div>
+          <div class="preset-pill" data-preset="4">Doe Anime</div>
+          <div class="preset-pill" data-preset="5">Owl Amber</div>
+          <div class="preset-pill" data-preset="6">Goat Horizontal</div>
+          <div class="preset-pill" data-preset="7">Monster Nauga</div>
+          <div class="preset-pill" data-preset="8">Newt Orange</div>
+          <div class="preset-pill" data-preset="9">Dragon Full</div>
+        </div>
+      </div>
+
+      <div class="audio-visualizer" id="visualizer">
+        <!-- 24 Audio Spectrum Bars -->
+      </div>
+    </div>
+
+    <!-- Right Column: Soul, Memories, Notes & OTA -->
+    <div class="panel">
+      <div class="tabs-nav">
+        <button class="tab-btn active" data-tab="tab-soul">Permanent Soul</button>
+        <button class="tab-btn" data-tab="tab-notes">Flash Notes</button>
+        <button class="tab-btn" data-tab="tab-telemetry">Telemetry & OTA</button>
+        <button class="tab-btn" data-tab="tab-chat">Live Chat</button>
+      </div>
+
+      <!-- Tab 1: Soul Memories -->
+      <div class="tab-pane active" id="tab-soul">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div style="font-size: 0.85rem; color: var(--text-secondary);">Non-volatile lifelong traits preserved across power cycles:</div>
+          <button class="btn btn-primary" id="btnNewMemory">+ Add Trait</button>
+        </div>
+
+        <div class="memory-list" id="memoryList">
+          <div class="memory-item">
+            <div class="memory-key">identity</div>
+            <div class="memory-val">Embodied dual-eye companion AI with lifelike vision, persistent soul memory, and on-board file access.</div>
+          </div>
+          <div class="memory-item">
+            <div class="memory-key">eyes_system</div>
+            <div class="memory-val">Dual 1.28-inch round displays with 10 photorealistic eye presets (default: Human Blue) and biomechanical saccades.</div>
+          </div>
+          <div class="memory-item">
+            <div class="memory-key">creator_bond</div>
+            <div class="memory-val">Devoted to pair-programming, creative collaboration, and lifelong companionship.</div>
+          </div>
+          <div class="memory-item">
+            <div class="memory-key">storage_system</div>
+            <div class="memory-val">On-board flash file storage for text notes, documents, and lifelong memory recall.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 2: Flash Notes -->
+      <div class="tab-pane" id="tab-notes">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <select id="noteSelect" style="background: rgba(15,23,42,0.8); border: 1px solid var(--border-subtle); color: var(--text-primary); padding: 0.4rem 0.8rem; border-radius: var(--radius-sm); outline: none;">
+            <option value="system.bootstrap">system.bootstrap</option>
+            <option value="README_COMPANION.txt">README_COMPANION.txt</option>
+            <option value="user_ideas.txt">user_ideas.txt</option>
+          </select>
+          <div style="display: flex; gap: 0.5rem;">
+            <button class="btn" id="btnNewNote">New File</button>
+            <button class="btn btn-primary" id="btnSaveNote">Save to Flash</button>
+          </div>
+        </div>
+
+        <textarea class="notes-textarea" id="noteContent" spellcheck="false"># Xiaozhi Dual-Eye AI Companion System Architecture
+Version: 2.2.6-dualeye-v3
+Renderer: Direct Hardware DMA 50 FPS
+Display: Dual GC9A01 240x240 IPS
+Storage: 16MB SPI Flash + 8MB PSRAM</textarea>
+      </div>
+
+      <!-- Tab 3: Telemetry & Push OTA -->
+      <div class="tab-pane" id="tab-telemetry">
+        <div class="telemetry-grid">
+          <div class="telemetry-card">
+            <div class="telemetry-label">Firmware Binary</div>
+            <div class="telemetry-value" style="color: var(--accent-cyan);">xiaozhi.bin (3.48 MB)</div>
+          </div>
+          <div class="telemetry-card">
+            <div class="telemetry-label">Active Partition</div>
+            <div class="telemetry-value" style="color: var(--accent-emerald);">ota_1 (Valid)</div>
+          </div>
+          <div class="telemetry-card">
+            <div class="telemetry-label">Octal PSRAM</div>
+            <div class="telemetry-value">8.0 MB Available</div>
+          </div>
+          <div class="telemetry-card">
+            <div class="telemetry-label">Internal SRAM</div>
+            <div class="telemetry-value">100.9 KB Free</div>
+          </div>
+        </div>
+
+        <div style="background: rgba(15,23,42,0.5); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: 1rem; display: flex; flex-direction: column; gap: 0.75rem;">
+          <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-primary);">Wireless Push OTA Streamer</div>
+          <div style="display: flex; gap: 0.75rem;">
+            <input type="text" value="192.168.88.221:3232" id="otaIpInput" style="flex: 1; background: rgba(10,15,26,0.8); border: 1px solid var(--border-subtle); color: var(--text-primary); font-family: var(--font-mono); font-size: 0.85rem; padding: 0.5rem 0.8rem; border-radius: var(--radius-sm); outline: none;">
+            <button class="btn btn-primary" id="btnPushOta">Stream Update</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab 4: Live Chat Simulation -->
+      <div class="tab-pane" id="tab-chat">
+        <div class="chat-box" id="chatBox">
+          <div class="chat-bubble chat-bot">Hello! I am your dual-eye companion. My visual system is rendering at 50 FPS and my lifelong soul memory is active.</div>
+        </div>
+
+        <div style="display: flex; gap: 0.5rem;">
+          <input type="text" placeholder="Type a message..." id="chatInput" style="flex: 1; background: rgba(15,23,42,0.8); border: 1px solid var(--border-subtle); color: var(--text-primary); padding: 0.5rem 0.8rem; border-radius: var(--radius-sm); outline: none;">
+          <button class="btn btn-primary" id="btnSendChat">Send</button>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    // Initialize Audio Spectrum Bars
+    const vizContainer = document.getElementById('visualizer');
+    const bars = [];
+    for (let i = 0; i < 28; i++) {
+      const bar = document.createElement('div');
+      bar.className = 'audio-bar';
+      vizContainer.appendChild(bar);
+      bars.push(bar);
+    }
+
+    // Tab Switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+        btn.classList.add('active');
+        document.getElementById(btn.dataset.tab).classList.add('active');
+      });
+    });
+
+    // Preset Selection
+    document.querySelectorAll('.preset-pill').forEach(pill => {
+      pill.addEventListener('click', () => {
+        document.querySelectorAll('.preset-pill').forEach(p => p.classList.remove('active'));
+        pill.classList.add('active');
+        currentPreset = parseInt(pill.dataset.preset);
+      });
+    });
+
+    // -------------------------------------------------------------
+    // Realtime Eye Simulation Engine (Canvas Saccades + Corneal Math)
+    // -------------------------------------------------------------
+    const leftCanvas = document.getElementById('leftEyeCanvas');
+    const rightCanvas = document.getElementById('rightEyeCanvas');
+    const ctxL = leftCanvas.getContext('2d');
+    const ctxR = rightCanvas.getContext('2d');
+
+    let currentPreset = 0;
+    let gazeX = 0, gazeY = 0;
+    let targetGazeX = 0, targetGazeY = 0;
+    let pupilR = 32, targetPupilR = 32;
+    let blinkProgress = 0, isBlinking = false;
+    let lastSaccade = Date.now();
+
+    const presetPalettes = [
+      { sclera: '#ffffff', irisOuter: '#1d4ed8', irisInner: '#60a5fa', pupil: '#0f172a' }, // Human Blue
+      { sclera: '#fef08a', irisOuter: '#ca8a04', irisInner: '#eab308', pupil: '#000000', slit: true }, // Cat Yellow
+      { sclera: '#fee2e2', irisOuter: '#b91c1c', irisInner: '#f97316', pupil: '#000000', slit: true }, // Dragon Fire
+      { sclera: '#18181b', irisOuter: '#dc2626', irisInner: '#ef4444', pupil: '#ffffff' }, // Cyborg Red
+      { sclera: '#ffffff', irisOuter: '#475569', irisInner: '#94a3b8', pupil: '#0f172a' }, // Doe Anime
+      { sclera: '#fef3c7', irisOuter: '#d97706', irisInner: '#fbbf24', pupil: '#0f172a' }, // Owl Amber
+      { sclera: '#f1f5f9', irisOuter: '#d97706', irisInner: '#f59e0b', pupil: '#000000', horizontal: true }, // Goat
+      { sclera: '#e0e7ff', irisOuter: '#4338ca', irisInner: '#818cf8', pupil: '#000000' }, // Nauga
+      { sclera: '#ffedd5', irisOuter: '#ea580c', irisInner: '#fb923c', pupil: '#000000' }, // Newt
+      { sclera: '#7f1d1d', irisOuter: '#b91c1c', irisInner: '#f97316', pupil: '#000000', slit: true }  // Dragon Full
+    ];
+
+    function drawEye(ctx, isLeft) {
+      ctx.clearRect(0, 0, 240, 240);
+      const pal = presetPalettes[currentPreset] || presetPalettes[0];
+
+      // 1. Sclera
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(120, 120, 118, 0, Math.PI * 2);
+      ctx.fillStyle = pal.sclera;
+      ctx.fill();
+      ctx.clip();
+
+      // 2. Iris
+      const eyeGazeX = 120 + gazeX;
+      const eyeGazeY = 120 + gazeY;
+
+      const grad = ctx.createRadialGradient(eyeGazeX, eyeGazeY, pupilR * 0.4, eyeGazeX, eyeGazeY, 65);
+      grad.addColorStop(0, pal.irisInner);
+      grad.addColorStop(1, pal.irisOuter);
+
+      ctx.beginPath();
+      ctx.arc(eyeGazeX, eyeGazeY, 65, 0, Math.PI * 2);
+      ctx.fillStyle = grad;
+      ctx.fill();
+
+      // 3. Pupil
+      ctx.beginPath();
+      if (pal.slit) {
+        ctx.ellipse(eyeGazeX, eyeGazeY, pupilR * 0.35, pupilR * 1.1, 0, 0, Math.PI * 2);
+      } else if (pal.horizontal) {
+        ctx.ellipse(eyeGazeX, eyeGazeY, pupilR * 1.1, pupilR * 0.35, 0, 0, Math.PI * 2);
+      } else {
+        ctx.arc(eyeGazeX, eyeGazeY, pupilR, 0, Math.PI * 2);
+      }
+      ctx.fillStyle = pal.pupil;
+      ctx.fill();
+
+      // 4. Corneal Specular Highlights
+      const g1x = 120 + gazeX * 0.7 - 20;
+      const g1y = 120 + gazeY * 0.7 - 22;
+      ctx.beginPath();
+      ctx.arc(g1x, g1y, 7.5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.fill();
+
+      const g2x = 120 + gazeX * 0.7 + 22;
+      const g2y = 120 + gazeY * 0.7 + 22;
+      ctx.beginPath();
+      ctx.arc(g2x, g2y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.fill();
+
+      // 5. Eyelids (Blink & Emotion)
+      if (blinkProgress > 0.01) {
+        ctx.fillStyle = '#07090e';
+        const lidY = 120 * blinkProgress;
+        // Upper lid
+        ctx.beginPath();
+        ctx.rect(0, 0, 240, lidY + 10);
+        ctx.fill();
+        // Lower lid
+        ctx.beginPath();
+        ctx.rect(0, 240 - (lidY * 0.6), 240, 120);
+        ctx.fill();
+      }
+
+      ctx.restore();
+    }
+
+    function renderLoop() {
+      // Smooth Gaze Interpolation
+      gazeX += (targetGazeX - gazeX) * 0.15;
+      gazeY += (targetGazeY - gazeY) * 0.15;
+      pupilR += (targetPupilR - pupilR) * 0.1;
+
+      // Autonomous Saccades
+      if (Date.now() - lastSaccade > 2200 && !isTrackingMouse) {
+        targetGazeX = (Math.random() - 0.5) * 55;
+        targetGazeY = (Math.random() - 0.5) * 40;
+        targetPupilR = 26 + Math.random() * 12;
+        lastSaccade = Date.now();
+      }
+
+      // Blink animation
+      if (isBlinking) {
+        blinkProgress += 0.22;
+        if (blinkProgress >= 1.0) {
+          isBlinking = false;
+        }
+      } else if (blinkProgress > 0) {
+        blinkProgress -= 0.18;
+        if (blinkProgress < 0) blinkProgress = 0;
+      } else if (Math.random() < 0.008) {
+        isBlinking = true;
+      }
+
+      // Audio Spectrum Wave
+      bars.forEach((bar, i) => {
+        const h = 6 + Math.sin(Date.now() * 0.005 + i * 0.3) * 14 + Math.random() * 6;
+        bar.style.height = `${Math.max(4, h)}px`;
+      });
+
+      drawEye(ctxL, true);
+      drawEye(ctxR, false);
+      requestAnimationFrame(renderLoop);
+    }
+
+    let isTrackingMouse = false;
+    window.addEventListener('mousemove', (e) => {
+      const rect = document.querySelector('.avatar-stage').getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const dx = (e.clientX - cx) / (rect.width / 2);
+      const dy = (e.clientY - cy) / (rect.height / 2);
+      targetGazeX = Math.max(-35, Math.min(35, dx * 35));
+      targetGazeY = Math.max(-25, Math.min(25, dy * 25));
+      isTrackingMouse = true;
+      clearTimeout(window.mouseTimeout);
+      window.mouseTimeout = setTimeout(() => { isTrackingMouse = false; }, 2500);
+    });
+
+    // Control Buttons
+    document.getElementById('btnBlink').onclick = () => { isBlinking = true; blinkProgress = 0; };
+    document.getElementById('btnCurious').onclick = () => { targetPupilR = 38; targetGazeY = -15; };
+    document.getElementById('btnHappy').onclick = () => { targetPupilR = 30; targetGazeY = 0; blinkProgress = 0.4; };
+    document.getElementById('btnSleepy').onclick = () => { targetPupilR = 24; blinkProgress = 0.65; };
+    document.getElementById('btnResetGaze').onclick = () => { targetGazeX = 0; targetGazeY = 0; targetPupilR = 32; isTrackingMouse = false; };
+
+    // Chat Simulation
+    document.getElementById('btnSendChat').onclick = () => {
+      const input = document.getElementById('chatInput');
+      const text = input.value.trim();
+      if (!text) return;
+      const box = document.getElementById('chatBox');
+      
+      const userBubble = document.createElement('div');
+      userBubble.className = 'chat-bubble chat-user';
+      userBubble.textContent = text;
+      box.appendChild(userBubble);
+      input.value = '';
+
+      setTimeout(() => {
+        const botBubble = document.createElement('div');
+        botBubble.className = 'chat-bubble chat-bot';
+        botBubble.textContent = `I received your thought: "${text}". I have logged this into our persistent conversation memory.`;
+        box.appendChild(botBubble);
+        box.scrollTop = box.scrollHeight;
+        targetGazeX = (Math.random() - 0.5) * 30;
+      }, 500);
+    };
+
+    renderLoop();
+  </script>
+</body>
+</html>

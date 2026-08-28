@@ -21,6 +21,16 @@
 #define I2C_SCL_IO                  GPIO_NUM_10       
 #define I2C_SDA_IO                  GPIO_NUM_11        
 
+// Touch 1 (Left Screen) - I2C0
+#define TOUCH1_INT_PIN              GPIO_NUM_5
+#define TOUCH1_RST_PIN              GPIO_NUM_4
+
+// Touch 2 (Right Screen) - I2C1
+#define I2C1_SCL_IO                 GPIO_NUM_2
+#define I2C1_SDA_IO                 GPIO_NUM_3
+#define TOUCH2_INT_PIN              GPIO_NUM_7
+#define TOUCH2_RST_PIN              GPIO_NUM_6
+
 #define DISPLAY_SDA_PIN             I2C_SDA_IO
 #define DISPLAY_SCL_PIN             I2C_SCL_IO
 
