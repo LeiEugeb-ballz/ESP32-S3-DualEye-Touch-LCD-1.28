@@ -433,20 +433,6 @@ public:
 
         // Start Direct TCP Push OTA Server on Port 3232
         OtaPushServer::StartServer(3232);
-
-        // Auto-configure user Wi-Fi credentials
-        auto& ssid_manager = SsidManager::GetInstance();
-        bool found = false;
-        for (const auto& item : ssid_manager.GetSsidList()) {
-            if (item.ssid == "2.4GHz" && item.password == "0828973709") {
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            ESP_LOGI(TAG, "Configuring default Wi-Fi network: 2.4GHz");
-            ssid_manager.AddSsid("2.4GHz", "0828973709");
-        }
     }
 
     virtual std::string GetBoardJson() override {

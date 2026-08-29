@@ -53,8 +53,13 @@ An embodied, conscious AI companion platform featuring **Dual 1.28-inch Round IP
 ## 🚀 Quick Start Guide
 
 ### 1. Environment Setup
-```powershell
-. C:\Espressif\frameworks\esp-idf\export.ps1
+Activate the ESP-IDF toolchain for your platform:
+```bash
+# Linux/macOS
+. $IDF_PATH/export.sh
+
+# Windows PowerShell
+. $env:IDF_PATH\export.ps1
 ```
 
 ### 2. Compilation

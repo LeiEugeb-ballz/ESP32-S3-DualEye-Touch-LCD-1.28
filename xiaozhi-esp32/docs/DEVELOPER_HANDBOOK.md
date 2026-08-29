@@ -7,14 +7,17 @@ This handbook contains all essential commands, workflows, and procedures needed 
 ## 1. Environment Setup
 
 ### Prerequisites
-* **ESP-IDF v5.5** (Installed at `C:\Espressif\frameworks\esp-idf`)
+* **ESP-IDF v5.5.2+**
 * **Python 3.10+** (with `pyserial`)
-* **PowerShell 7+** / Command Prompt
 
 ### Initializing Environment
-In any PowerShell terminal, activate the ESP-IDF toolchain:
-```powershell
-. C:\Espressif\frameworks\esp-idf\export.ps1
+Activate the ESP-IDF toolchain:
+```bash
+# Linux/macOS
+. $IDF_PATH/export.sh
+
+# Windows PowerShell
+. $env:IDF_PATH\export.ps1
 ```
 
 ---
@@ -22,8 +25,8 @@ In any PowerShell terminal, activate the ESP-IDF toolchain:
 ## 2. Build & Compilation Workflows
 
 ### Standard Build
-```powershell
-cd c:\Users\txr45\Documents\Eyes\ESP32-S3-DualEye-Touch-LCD-1.28\xiaozhi-esp32
+```bash
+cd xiaozhi-esp32
 idf.py build
 ```
 
@@ -86,6 +89,6 @@ python generate_presets.py
 
 ## 5. Web Companion Portal
 
-To interact with her visual avatar and memory files in a desktop browser:
-1. Open [`web_companion/index.html`](file:///c:/Users/txr45/Documents/Eyes/ESP32-S3-DualEye-Touch-LCD-1.28/xiaozhi-esp32/web_companion/index.html) directly in any modern browser.
-2. Experience real-time eye gaze tracking, test moods, manage lifelong soul memories, and push OTA firmware updates directly.
+To interact with the visual avatar and memory files in a desktop browser:
+1. Open `web_companion/index.html` directly in any modern browser.
+2. Experience real-time eye gaze tracking, test moods, manage soul memories, and push OTA firmware updates.

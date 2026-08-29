@@ -1,6 +1,6 @@
 # Dual-Boot & ESPAI Integration Guide
 
-This guide explains how to integrate the **ESPAI library** (`C:\Users\txr45\Downloads\ESPAI-0.9.0\ESPAI-0.9.0`) and how to configure a **dual-boot partition scheme** or **safe repository fork** so you can experiment with direct on-device LLM calls without losing the current stable Xiaozhi DualEye system.
+This guide explains how to integrate the **ESPAI library** and how to configure a **dual-boot partition scheme** or **safe repository fork** so you can experiment with direct on-device LLM calls without losing the current stable Xiaozhi DualEye system.
 
 ---
 

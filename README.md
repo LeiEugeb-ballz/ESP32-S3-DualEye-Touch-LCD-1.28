@@ -1,28 +1,30 @@
-[中文版](./README_CN.md)
+# ESP32-S3-DualEye-Touch-LCD-1.28
 
-### Arduino
-Use under Arduino IDE software:
-- `example`: Store examples (directly compilable).
-- `libraries`: Store library files (this folder is only used in the Arduino environment!).
-  - **Note**: `esp32 by Espressif Systems` must be version 3.2.0 or above! (The current example is based on V3.2.0 programming.)
+Xiaozhi Dual-Eye AI Companion firmware for the **Waveshare ESP32-S3-DualEye-Touch-LCD-1.28** board.
 
+## Project Structure
 
-#### Arduino Example Tools Configuration:
-![Arduino Settings](ESP32-S3-DualEye-Touch-LCD-1.28-Arduino-Setting.png)
+```
+xiaozhi-esp32/          Production firmware (ESP-IDF 5.5.2+)
+├── main/               Application source code
+│   └── boards/waveshare/esp32-s3-dualeye-lcd-1.28/
+│                       Board-specific hardware drivers, display engine, and eye presets
+├── docs/               Technical documentation
+└── scripts/            Build and deployment utilities
+```
 
+## Quick Start
 
-### ESP-IDF
-Used under VSCode software. The samples stored in this folder can be compiled directly. When selecting the project in VSCode, note that you should not select `ESP-IDF` directly, but instead select the project folder *under* `ESP-IDF` (normally named `Serial number_Program name`).
-- **Note**: `ESP-IDF` must be version 5.4.0 or above.
+See [xiaozhi-esp32/README.md](xiaozhi-esp32/README.md) for build instructions, hardware specs, and documentation.
 
+## Hardware
 
-### Firmware
-Test firmware (burn using "flash_download_tool_3.9.5" at address `0x00`. Remember to check the corresponding box.)
+* **SoC**: ESP32-S3 Dual-Core Xtensa LX7 @ 240 MHz
+* **Memory**: 16 MB SPI Flash + 8 MB Octal PSRAM
+* **Displays**: Dual 1.28" Round IPS LCDs (GC9A01, 240×240)
+* **Touch**: Dual CST816S Capacitive Touch Controllers
+* **Audio**: ES8311 DAC + ES7210 Quad-Mic Array
 
+## Links
 
-### Additional Note
-If compilation succeeds the first time but fails in subsequent tests, re-decompress the folder and compile the new files.
-
-
-For more product information, please refer to:  
-[https://www.waveshare.net/shop/ESP32-S3-DualEye-LCD-1.28.htm](https://www.waveshare.net/shop/ESP32-S3-DualEye-LCD-1.28.htm)
+* [Waveshare Product Page](https://www.waveshare.net/shop/ESP32-S3-DualEye-LCD-1.28.htm)
