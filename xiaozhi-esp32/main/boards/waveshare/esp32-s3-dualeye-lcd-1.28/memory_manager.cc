@@ -130,11 +130,11 @@ void SetMood(const std::string& mood) {
 
     // Adjust gaze and pupil parameters according to emotional disposition
     if (mood == "curious" || mood == "excited") {
-        DisplayManager::SetAudioActivity(0.8f, true);
+        DisplayManager::SetAudioEnergy(0.8f, true);
     } else if (mood == "sleepy" || mood == "relaxed") {
-        DisplayManager::SetAudioActivity(0.1f, false);
+        DisplayManager::SetAudioEnergy(0.1f, false);
     } else if (mood == "thoughtful" || mood == "focused") {
-        DisplayManager::SetAudioActivity(0.4f, false);
+        DisplayManager::SetAudioEnergy(0.4f, false);
     }
 }
 

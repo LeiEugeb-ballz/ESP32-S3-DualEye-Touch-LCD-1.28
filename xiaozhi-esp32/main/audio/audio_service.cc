@@ -1,6 +1,8 @@
 #include "audio_service.h"
+#include "boards/waveshare/esp32-s3-dualeye-lcd-1.28/display_manager.h"
 #include <esp_log.h>
 #include <cstring>
+#include <cmath>
 
 #define RATE_CVT_CFG(_src_rate, _dest_rate, _channel)        \
     (esp_ae_rate_cvt_cfg_t)                                  \
@@ -306,6 +308,18 @@ void AudioService::AudioOutputTask() {
             codec_->EnableOutput(true);
         }
 
+        // Real-time audio energy coupling for dynamic eye pupil dilation
+        if (!task->pcm.empty()) {
+            int64_t sum_sq = 0;
+            for (int16_t sample : task->pcm) {
+                sum_sq += (int32_t)sample * (int32_t)sample;
+            }
+            float rms = std::sqrt((float)sum_sq / task->pcm.size());
+            float normalized_energy = rms / 6000.0f;
+            if (normalized_energy > 1.0f) normalized_energy = 1.0f;
+            DisplayManager::SetAudioEnergy(normalized_energy, true);
+        }
+
         codec_->OutputData(task->pcm);
 
         /* Update the last output time */
@@ -321,6 +335,7 @@ void AudioService::AudioOutputTask() {
 #endif
     }
 
+    DisplayManager::SetAudioEnergy(0.0f, false);
     ESP_LOGW(TAG, "Audio output task stopped");
 }
 
@@ -676,6 +691,7 @@ void AudioService::ResetDecoder() {
     audio_decode_queue_.clear();
     audio_playback_queue_.clear();
     audio_testing_queue_.clear();
+    DisplayManager::SetAudioEnergy(0.0f, false);
     audio_queue_cv_.notify_all();
 }
 

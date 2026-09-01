@@ -303,10 +303,6 @@ find_component_by_pattern("xiaozhi-fonts" XIAOZHI_FONTS_COMPONENT XIAOZHI_FONTS_
 if(XIAOZHI_FONTS_COMPONENT_PATH)
     set(XIAOZHI_FONTS_PATH "${XIAOZHI_FONTS_COMPONENT_PATH}")
 endif()
-    endif()
-endforeach()
-
-endif()
 
 
 # Function to build default assets based on configuration

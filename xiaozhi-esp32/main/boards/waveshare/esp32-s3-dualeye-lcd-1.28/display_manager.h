@@ -97,7 +97,8 @@ public:
     virtual void Unlock() override;
 
     // Lock-free audio activity hook (preserves solid audio foundation)
-    static void SetAudioActivity(float energy, bool speech_active);
+    virtual void SetAudioActivity(float energy, bool speech_active) override;
+    static void SetAudioEnergy(float energy, bool speech_active);
 
     // Benchmark metrics getter
     static void GetBenchmarkMetrics(uint32_t& eye1_us, uint32_t& both_us);

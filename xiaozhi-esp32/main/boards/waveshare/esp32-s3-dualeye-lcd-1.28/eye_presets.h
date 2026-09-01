@@ -8,6 +8,7 @@ namespace EyeRenderer {
 
 enum EyePresetId {
     PRESET_DEFAULT = 0,
+    PRESET_JAPANESE,
     PRESET_CAT,
     PRESET_DRAGON,
     PRESET_TERMINATOR,
@@ -21,6 +22,7 @@ enum EyePresetId {
 };
 
 extern const EyeAssetConfig kDefaultEyeAsset;
+extern const EyeAssetConfig kJapaneseEyeAsset;
 extern const EyeAssetConfig kCatEyeAsset;
 extern const EyeAssetConfig kDragonEyeAsset;
 extern const EyeAssetConfig kTerminatorEyeAsset;

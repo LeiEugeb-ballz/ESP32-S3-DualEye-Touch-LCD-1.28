@@ -209,7 +209,7 @@ RgbLcdDisplay::RgbLcdDisplay(esp_lcd_panel_io_handle_t panel_io, esp_lcd_panel_h
         .flags = {
             .buff_dma = 1,
             .swap_bytes = 0,
-            .full_refresh = 1,
+            .full_refresh = 0,
             .direct_mode = 1,
         },
     };

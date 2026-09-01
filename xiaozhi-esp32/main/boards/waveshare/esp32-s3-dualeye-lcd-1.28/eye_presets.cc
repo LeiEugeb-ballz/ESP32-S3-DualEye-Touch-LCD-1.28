@@ -1,6 +1,7 @@
 // Copyright (c) 2026 Waveshare / Xiaozhi Project
 #include "eye_presets.h"
 #include "default_eye_asset.h"
+#include "japanese_eye_asset.h"
 #include <cstring>
 
 namespace EyeRenderer {
@@ -27333,6 +27334,7 @@ const EyeAssetConfig kNoScleraEyeAsset = {
 
 const EyeAssetConfig* GetEyePreset(EyePresetId id) {
     switch (id) {
+        case PRESET_JAPANESE: return &kJapaneseEyeAsset;
         case PRESET_CAT: return &kCatEyeAsset;
         case PRESET_DRAGON: return &kDragonEyeAsset;
         case PRESET_TERMINATOR: return &kTerminatorEyeAsset;
@@ -27350,6 +27352,7 @@ const EyeAssetConfig* GetEyePreset(EyePresetId id) {
 
 const EyeAssetConfig* GetEyePresetByName(const char* name) {
     if (!name) return &kDefaultEyeAsset;
+    if (strstr(name, "japanese") || strstr(name, "Japanese") || strstr(name, "asian") || strstr(name, "human_jp")) return &kJapaneseEyeAsset;
     if (strstr(name, "cat") || strstr(name, "Cat") || strstr(name, "kitten") || strstr(name, "feline")) return &kCatEyeAsset;
     if (strstr(name, "dragon") || strstr(name, "Dragon") || strstr(name, "fire") || strstr(name, "lizard")) return &kDragonEyeAsset;
     if (strstr(name, "terminator") || strstr(name, "Terminator") || strstr(name, "robot") || strstr(name, "cyborg") || strstr(name, "red")) return &kTerminatorEyeAsset;

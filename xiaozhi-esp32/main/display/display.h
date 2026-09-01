@@ -40,6 +40,7 @@ public:
     virtual Theme* GetTheme() { return current_theme_; }
     virtual void UpdateStatusBar(bool update_all = false);
     virtual void SetPowerSaveMode(bool on);
+    virtual void SetAudioActivity(float energy, bool speech_active) {}
     virtual void SetupUI() { 
         setup_ui_called_ = true;
     }

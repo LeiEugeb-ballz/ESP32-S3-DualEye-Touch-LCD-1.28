@@ -276,8 +276,8 @@ void DisplayManager::EyeRenderTask(void* arg) {
         int left_pid = s_left_preset_id.load(std::memory_order_relaxed);
         int right_pid = s_right_preset_id.load(std::memory_order_relaxed);
 
-        bool left_has_eyelids = (left_pid == EyeRenderer::PRESET_DEFAULT || left_pid == EyeRenderer::PRESET_OWL);
-        bool right_has_eyelids = (right_pid == EyeRenderer::PRESET_DEFAULT || right_pid == EyeRenderer::PRESET_OWL);
+        bool left_has_eyelids = (left_pid == EyeRenderer::PRESET_DEFAULT || left_pid == EyeRenderer::PRESET_JAPANESE || left_pid == EyeRenderer::PRESET_OWL);
+        bool right_has_eyelids = (right_pid == EyeRenderer::PRESET_DEFAULT || right_pid == EyeRenderer::PRESET_JAPANESE || right_pid == EyeRenderer::PRESET_OWL);
         bool either_has_eyelids = (left_has_eyelids || right_has_eyelids);
 
         float render_u_thresh = 0.0f;
@@ -490,6 +490,11 @@ void DisplayManager::SetTouchHandles(esp_lcd_touch_handle_t tp1, esp_lcd_touch_h
 }
 
 void DisplayManager::SetAudioActivity(float energy, bool speech_active) {
+    audio_energy_.store(energy, std::memory_order_relaxed);
+    speech_active_.store(speech_active, std::memory_order_relaxed);
+}
+
+void DisplayManager::SetAudioEnergy(float energy, bool speech_active) {
     audio_energy_.store(energy, std::memory_order_relaxed);
     speech_active_.store(speech_active, std::memory_order_relaxed);
 }
