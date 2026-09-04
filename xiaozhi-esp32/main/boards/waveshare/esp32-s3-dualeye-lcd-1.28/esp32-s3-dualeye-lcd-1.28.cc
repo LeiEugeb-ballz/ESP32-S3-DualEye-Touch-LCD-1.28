@@ -108,6 +108,11 @@ private:
 
     void InitializeTouch() {
         ESP_LOGI(TAG, "Initializing Touch Panels (CST816S)...");
+        gpio_set_direction(TOUCH1_INT_PIN, GPIO_MODE_INPUT);
+        gpio_set_pull_mode(TOUCH1_INT_PIN, GPIO_PULLUP_ONLY);
+        gpio_set_direction(TOUCH2_INT_PIN, GPIO_MODE_INPUT);
+        gpio_set_pull_mode(TOUCH2_INT_PIN, GPIO_PULLUP_ONLY);
+
         // 1. Touch 1 (Left Screen) on i2c_bus_ (I2C0)
         esp_lcd_panel_io_handle_t tp1_io_handle = nullptr;
         esp_lcd_panel_io_i2c_config_t tp1_io_config = {};
@@ -273,17 +278,30 @@ private:
     void InitializeButtons() {
         boot_button_.OnClick([this]() {
             auto& app = Application::GetInstance();
-            if (app.GetDeviceState() == kDeviceStateStarting) {
+            auto state = app.GetDeviceState();
+            if (state == kDeviceStateStarting) {
                 EnterWifiConfigMode();
+                return;
+            }
+            if (state == kDeviceStateWifiConfiguring) {
+                // While in AP/Config mode, single click cycles eye presets immediately!
+                ESP_LOGI(TAG, "BOOT button click in Config Mode -> Cycling Eye Preset");
+                DisplayManager::CycleEyePreset();
                 return;
             }
             app.ToggleChatState();
         });
 
-        // Double-click BOOT button to cycle between photorealistic eye styles
+        // Double-click BOOT button anytime to cycle between photorealistic eye styles
         boot_button_.OnDoubleClick([this]() {
             ESP_LOGI(TAG, "BOOT button double-click -> Cycling Eye Preset");
             DisplayManager::CycleEyePreset();
+        });
+
+        // Long-press BOOT button anytime to force entry into WiFi config mode
+        boot_button_.OnLongPress([this]() {
+            ESP_LOGI(TAG, "BOOT button long-press -> Entering WiFi Config Mode");
+            EnterWifiConfigMode();
         });
     }
 

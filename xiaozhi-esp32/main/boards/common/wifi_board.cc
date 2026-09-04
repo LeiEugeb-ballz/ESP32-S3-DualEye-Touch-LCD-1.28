@@ -23,8 +23,8 @@
 
 static const char *TAG = "WifiBoard";
 
-// Connection timeout in seconds
-static constexpr int CONNECT_TIMEOUT_SEC = 60;
+// Connection timeout in seconds (12s for responsive fallback to AP config mode when away from home)
+static constexpr int CONNECT_TIMEOUT_SEC = 12;
 
 WifiBoard::WifiBoard() {
     // Create connection timeout timer
