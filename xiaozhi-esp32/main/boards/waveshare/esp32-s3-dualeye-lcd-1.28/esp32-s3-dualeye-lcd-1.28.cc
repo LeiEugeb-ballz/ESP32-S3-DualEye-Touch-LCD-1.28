@@ -130,15 +130,27 @@ private:
                 .y_max = DISPLAY_HEIGHT,
                 .rst_gpio_num = TOUCH1_RST_PIN,
                 .int_gpio_num = TOUCH1_INT_PIN,
+                .levels = {
+                    .reset = 0,
+                    .interrupt = 0,
+                },
                 .flags = {
                     .swap_xy = 0,
                     .mirror_x = 0,
                     .mirror_y = 0,
                 },
+                .interrupt_callback = DisplayManager::Touch1InterruptCallback,
             };
             ret1 = esp_lcd_touch_new_i2c_cst816s(tp1_io_handle, &tp1_cfg, &tp_);
             if (ret1 == ESP_OK) {
-                ESP_LOGI(TAG, "Touch 1 (Left) initialized successfully");
+                // Configure CST816S for continuous active mode (disables 2s auto-sleep standby):
+                // 0xFE: DisAutoSleep = 1 (Continuous high-frequency active sensing)
+                // 0xFA: IrqCtl = 0x70 (Touch, Change, Motion pulses)
+                uint8_t dis_sleep = 0x01;
+                uint8_t irq_ctl = 0x70;
+                esp_lcd_panel_io_tx_param(tp1_io_handle, 0xFE, &dis_sleep, 1);
+                esp_lcd_panel_io_tx_param(tp1_io_handle, 0xFA, &irq_ctl, 1);
+                ESP_LOGI(TAG, "Touch 1 (Left) initialized in ultra-sensitive dynamic mode");
             } else {
                 ESP_LOGW(TAG, "Failed to initialize Touch 1: %s", esp_err_to_name(ret1));
             }
@@ -171,15 +183,24 @@ private:
                     .y_max = DISPLAY_HEIGHT,
                     .rst_gpio_num = TOUCH2_RST_PIN,
                     .int_gpio_num = TOUCH2_INT_PIN,
+                    .levels = {
+                        .reset = 0,
+                        .interrupt = 0,
+                    },
                     .flags = {
                         .swap_xy = 0,
                         .mirror_x = 1,
                         .mirror_y = 1,
                     },
+                    .interrupt_callback = DisplayManager::Touch2InterruptCallback,
                 };
                 ret2 = esp_lcd_touch_new_i2c_cst816s(tp2_io_handle, &tp2_cfg, &tp2_);
                 if (ret2 == ESP_OK) {
-                    ESP_LOGI(TAG, "Touch 2 (Right) initialized successfully");
+                    uint8_t dis_sleep = 0x01;
+                    uint8_t irq_ctl = 0x70;
+                    esp_lcd_panel_io_tx_param(tp2_io_handle, 0xFE, &dis_sleep, 1);
+                    esp_lcd_panel_io_tx_param(tp2_io_handle, 0xFA, &irq_ctl, 1);
+                    ESP_LOGI(TAG, "Touch 2 (Right) initialized in ultra-sensitive dynamic mode");
                 } else {
                     ESP_LOGW(TAG, "Failed to initialize Touch 2: %s", esp_err_to_name(ret2));
                 }
