@@ -37,6 +37,21 @@ struct TouchTracker {
 static TouchTracker s_tracker_left;
 static TouchTracker s_tracker_right;
 
+static std::atomic<float> s_drag_dx_left{0.0f};
+static std::atomic<bool> s_dragging_left{false};
+static std::atomic<float> s_drag_dx_right{0.0f};
+static std::atomic<bool> s_dragging_right{false};
+static std::atomic<float> s_slide_offset_left{0.0f};
+static std::atomic<float> s_slide_offset_right{0.0f};
+
+void DisplayManager::SlideEyeIn(bool is_left, float start_offset_x) {
+    if (is_left) {
+        s_slide_offset_left.store(start_offset_x, std::memory_order_relaxed);
+    } else {
+        s_slide_offset_right.store(start_offset_x, std::memory_order_relaxed);
+    }
+}
+
 static void ProcessTouchInput(esp_lcd_touch_handle_t tp, TouchTracker& tracker, bool is_left, uint32_t now_ms) {
     if (!tp) return;
 
@@ -51,6 +66,13 @@ static void ProcessTouchInput(esp_lcd_touch_handle_t tp, TouchTracker& tracker, 
     esp_err_t err = esp_lcd_touch_read_data(tp);
     if (err != ESP_OK) {
         tracker.is_touching = false;
+        if (is_left) {
+            s_dragging_left.store(false, std::memory_order_relaxed);
+            s_drag_dx_left.store(0.0f, std::memory_order_relaxed);
+        } else {
+            s_dragging_right.store(false, std::memory_order_relaxed);
+            s_drag_dx_right.store(0.0f, std::memory_order_relaxed);
+        }
         return;
     }
 
@@ -68,42 +90,79 @@ static void ProcessTouchInput(esp_lcd_touch_handle_t tp, TouchTracker& tracker, 
             tracker.last_y = ty[0];
             tracker.start_time_ms = now_ms;
             tracker.gesture_triggered = false;
+            if (is_left) {
+                s_dragging_left.store(true, std::memory_order_relaxed);
+                s_drag_dx_left.store(0.0f, std::memory_order_relaxed);
+            } else {
+                s_dragging_right.store(true, std::memory_order_relaxed);
+                s_drag_dx_right.store(0.0f, std::memory_order_relaxed);
+            }
         } else {
             tracker.last_x = tx[0];
             tracker.last_y = ty[0];
             int dx = (int)tracker.last_x - (int)tracker.start_x;
-            if (!tracker.gesture_triggered && (now_ms - tracker.start_time_ms < 800)) {
-                if (dx > 20) { // Highly sensitive swipe right
+
+            if (is_left) {
+                s_drag_dx_left.store((float)dx, std::memory_order_relaxed);
+            } else {
+                s_drag_dx_right.store((float)dx, std::memory_order_relaxed);
+            }
+
+            if (!tracker.gesture_triggered) {
+                if (dx > 30) { // Dragged Right -> Previous Preset
                     tracker.gesture_triggered = true;
                     if (is_left) {
-                        ESP_LOGI(TAG, "Left Touch Swipe RIGHT -> Prev Preset");
+                        s_dragging_left.store(false, std::memory_order_relaxed);
+                        s_drag_dx_left.store(0.0f, std::memory_order_relaxed);
+                        ESP_LOGI(TAG, "Left Drag RIGHT -> Previous Preset");
                         DisplayManager::CycleLeftEyeBackwards();
+                        DisplayManager::SlideEyeIn(true, -28.0f); // Incoming eye glides in from left
                     } else {
-                        ESP_LOGI(TAG, "Right Touch Swipe RIGHT -> Prev Preset");
+                        s_dragging_right.store(false, std::memory_order_relaxed);
+                        s_drag_dx_right.store(0.0f, std::memory_order_relaxed);
+                        ESP_LOGI(TAG, "Right Drag RIGHT -> Previous Preset");
                         DisplayManager::CycleRightEyeBackwards();
+                        DisplayManager::SlideEyeIn(false, -28.0f);
                     }
-                } else if (dx < -20) { // Highly sensitive swipe left
+                } else if (dx < -30) { // Dragged Left -> Next Preset
                     tracker.gesture_triggered = true;
                     if (is_left) {
-                        ESP_LOGI(TAG, "Left Touch Swipe LEFT -> Next Preset");
+                        s_dragging_left.store(false, std::memory_order_relaxed);
+                        s_drag_dx_left.store(0.0f, std::memory_order_relaxed);
+                        ESP_LOGI(TAG, "Left Drag LEFT -> Next Preset");
                         DisplayManager::CycleLeftEye();
+                        DisplayManager::SlideEyeIn(true, 28.0f); // Incoming eye glides in from right
                     } else {
-                        ESP_LOGI(TAG, "Right Touch Swipe LEFT -> Next Preset");
+                        s_dragging_right.store(false, std::memory_order_relaxed);
+                        s_drag_dx_right.store(0.0f, std::memory_order_relaxed);
+                        ESP_LOGI(TAG, "Right Drag LEFT -> Next Preset");
                         DisplayManager::CycleRightEye();
+                        DisplayManager::SlideEyeIn(false, 28.0f);
                     }
                 }
             }
         }
     } else {
         if (tracker.is_touching) {
-            // Finger released: if it was a quick light TAP (< 800ms and not swiped), cycle preset!
-            if (!tracker.gesture_triggered && (now_ms - tracker.start_time_ms < 800)) {
+            int dx = (int)tracker.last_x - (int)tracker.start_x;
+            if (is_left) {
+                s_dragging_left.store(false, std::memory_order_relaxed);
+                s_drag_dx_left.store(0.0f, std::memory_order_relaxed);
+            } else {
+                s_dragging_right.store(false, std::memory_order_relaxed);
+                s_drag_dx_right.store(0.0f, std::memory_order_relaxed);
+            }
+
+            // Quick light TAP (< 600ms and minimal movement < 18px)
+            if (!tracker.gesture_triggered && (now_ms - tracker.start_time_ms < 600) && std::abs(dx) < 18) {
                 if (is_left) {
-                    ESP_LOGI(TAG, "Left Screen TAPPED -> Cycling Left Eye");
+                    ESP_LOGI(TAG, "Left Screen TAPPED -> Next Preset");
                     DisplayManager::CycleLeftEye();
+                    DisplayManager::SlideEyeIn(true, 24.0f);
                 } else {
-                    ESP_LOGI(TAG, "Right Screen TAPPED -> Cycling Right Eye");
+                    ESP_LOGI(TAG, "Right Screen TAPPED -> Next Preset");
                     DisplayManager::CycleRightEye();
+                    DisplayManager::SlideEyeIn(false, 24.0f);
                 }
             }
             tracker.is_touching = false;
@@ -397,9 +456,45 @@ void DisplayManager::EyeRenderTask(void* arg) {
         }
 
         // 5. Assemble RenderParams for Left and Right Eye
+        // Smooth slide-in exponential decay (~150ms glide into center)
+        float slide_l = s_slide_offset_left.load(std::memory_order_relaxed);
+        if (std::abs(slide_l) > 0.5f) {
+            slide_l *= 0.74f;
+            s_slide_offset_left.store(slide_l, std::memory_order_relaxed);
+        } else {
+            s_slide_offset_left.store(0.0f, std::memory_order_relaxed);
+            slide_l = 0.0f;
+        }
+
+        float slide_r = s_slide_offset_right.load(std::memory_order_relaxed);
+        if (std::abs(slide_r) > 0.5f) {
+            slide_r *= 0.74f;
+            s_slide_offset_right.store(slide_r, std::memory_order_relaxed);
+        } else {
+            s_slide_offset_right.store(0.0f, std::memory_order_relaxed);
+            slide_r = 0.0f;
+        }
+
+        // Apply interactive touch drag or slide-in offset
+        float gaze_x_l = current_gaze_x_ + micro_tremor_x + 1.8f;
+        if (s_dragging_left.load(std::memory_order_relaxed)) {
+            float drag = s_drag_dx_left.load(std::memory_order_relaxed) * 0.45f;
+            gaze_x_l = std::clamp(drag, -28.0f, 28.0f);
+        } else if (std::abs(slide_l) > 0.1f) {
+            gaze_x_l += slide_l;
+        }
+
+        float gaze_x_r = current_gaze_x_ + micro_tremor_x - 1.8f;
+        if (s_dragging_right.load(std::memory_order_relaxed)) {
+            float drag = s_drag_dx_right.load(std::memory_order_relaxed) * 0.45f;
+            gaze_x_r = std::clamp(drag, -28.0f, 28.0f);
+        } else if (std::abs(slide_r) > 0.1f) {
+            gaze_x_r += slide_r;
+        }
+
         // Binocular vergence (+1.8px inward on left, -1.8px inward on right)
         EyeRenderer::RenderParams params_left;
-        params_left.gaze_x = (int16_t)roundf(current_gaze_x_ + micro_tremor_x + 1.8f);
+        params_left.gaze_x = (int16_t)roundf(gaze_x_l);
         params_left.gaze_y = (int16_t)roundf(current_gaze_y_ + micro_tremor_y);
         params_left.pupil_dilation = (uint8_t)roundf(effective_pupil);
         params_left.upper_eyelid_threshold = left_has_eyelids ? (uint8_t)std::clamp((int)roundf(current_u_thresh), 0, 255) : 0;
@@ -408,7 +503,7 @@ void DisplayManager::EyeRenderTask(void* arg) {
         params_left.enable_highlights = true;
 
         EyeRenderer::RenderParams params_right = params_left;
-        params_right.gaze_x = (int16_t)roundf(current_gaze_x_ + micro_tremor_x - 1.8f);
+        params_right.gaze_x = (int16_t)roundf(gaze_x_r);
         params_right.upper_eyelid_threshold = right_has_eyelids ? (uint8_t)std::clamp((int)roundf(current_u_thresh), 0, 255) : 0;
         params_right.lower_eyelid_threshold = right_has_eyelids ? (uint8_t)std::clamp((int)roundf(current_l_thresh), 0, 255) : 0;
 

@@ -117,8 +117,9 @@ public:
     static int GetRightPresetId();
     static int GetCurrentPresetId();
 
-    // Capacitive Touch Integration
+    // Capacitive Touch Integration & Transitions
     static void SetTouchHandles(esp_lcd_touch_handle_t tp1, esp_lcd_touch_handle_t tp2);
+    static void SlideEyeIn(bool is_left, float start_offset_x);
 };
 
 // Single eye display instance representing one physical screen surface
