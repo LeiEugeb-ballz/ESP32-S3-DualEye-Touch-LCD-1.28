@@ -119,8 +119,6 @@ public:
 
     // Capacitive Touch Integration
     static void SetTouchHandles(esp_lcd_touch_handle_t tp1, esp_lcd_touch_handle_t tp2);
-    static void Touch1InterruptCallback(esp_lcd_touch_handle_t tp);
-    static void Touch2InterruptCallback(esp_lcd_touch_handle_t tp);
 };
 
 // Single eye display instance representing one physical screen surface

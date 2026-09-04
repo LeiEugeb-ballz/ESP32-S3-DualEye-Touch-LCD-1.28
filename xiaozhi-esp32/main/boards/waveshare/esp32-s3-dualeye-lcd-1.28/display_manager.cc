@@ -23,16 +23,6 @@ static const char* TAG = "DualEyeDisplay";
 // ---------------------------------------------------------------------------
 static esp_lcd_touch_handle_t s_tp_left = nullptr;
 static esp_lcd_touch_handle_t s_tp_right = nullptr;
-static std::atomic<bool> s_touch1_pending{false};
-static std::atomic<bool> s_touch2_pending{false};
-
-void DisplayManager::Touch1InterruptCallback(esp_lcd_touch_handle_t tp) {
-    s_touch1_pending.store(true, std::memory_order_relaxed);
-}
-
-void DisplayManager::Touch2InterruptCallback(esp_lcd_touch_handle_t tp) {
-    s_touch2_pending.store(true, std::memory_order_relaxed);
-}
 
 struct TouchTracker {
     bool is_touching = false;
@@ -50,42 +40,49 @@ static TouchTracker s_tracker_right;
 static void ProcessTouchInput(esp_lcd_touch_handle_t tp, TouchTracker& tracker, bool is_left, uint32_t now_ms) {
     if (!tp) return;
 
-    // Check interrupt pulse from hardware ISR or low pin level or active touch session
-    bool had_intr = is_left ? s_touch1_pending.exchange(false, std::memory_order_relaxed)
-                            : s_touch2_pending.exchange(false, std::memory_order_relaxed);
+    // Check INT pin: CST816S pulls INT pin LOW (0) when actively touched.
+    // When idle (INT is HIGH 1), skip I2C read completely to prevent bus stalls and NACK errors.
     gpio_num_t int_pin = is_left ? TOUCH1_INT_PIN : TOUCH2_INT_PIN;
-    bool pin_low = (gpio_get_level(int_pin) == 0);
-
-    if (!had_intr && !pin_low && !tracker.is_touching) {
+    if (gpio_get_level(int_pin) != 0) {
+        if (tracker.is_touching) {
+            // Finger released: if it was a quick TAP (< 500ms and not swiped), cycle preset
+            if (!tracker.gesture_triggered && (now_ms - tracker.start_time_ms < 500)) {
+                if (is_left) {
+                    ESP_LOGI(TAG, "Left Screen TAPPED -> Cycling Left Eye");
+                    DisplayManager::CycleLeftEye();
+                } else {
+                    ESP_LOGI(TAG, "Right Screen TAPPED -> Cycling Right Eye");
+                    DisplayManager::CycleRightEye();
+                }
+            }
+            tracker.is_touching = false;
+        }
         return;
     }
 
     esp_err_t err = esp_lcd_touch_read_data(tp);
-    if (err != ESP_OK) {
-        tracker.is_touching = false;
-        return;
-    }
+    if (err != ESP_OK) return;
 
-    esp_lcd_touch_point_data_t pt[1];
+    uint16_t tx[1] = {0};
+    uint16_t ty[1] = {0};
     uint8_t touch_cnt = 0;
-    esp_err_t ret = esp_lcd_touch_get_data(tp, pt, &touch_cnt, 1);
-    bool pressed = (ret == ESP_OK && touch_cnt > 0);
+    bool pressed = esp_lcd_touch_get_coordinates(tp, tx, ty, NULL, &touch_cnt, 1);
 
-    if (pressed) {
+    if (pressed && touch_cnt > 0) {
         if (!tracker.is_touching) {
             tracker.is_touching = true;
-            tracker.start_x = pt[0].x;
-            tracker.start_y = pt[0].y;
-            tracker.last_x = pt[0].x;
-            tracker.last_y = pt[0].y;
+            tracker.start_x = tx[0];
+            tracker.start_y = ty[0];
+            tracker.last_x = tx[0];
+            tracker.last_y = ty[0];
             tracker.start_time_ms = now_ms;
             tracker.gesture_triggered = false;
         } else {
-            tracker.last_x = pt[0].x;
-            tracker.last_y = pt[0].y;
+            tracker.last_x = tx[0];
+            tracker.last_y = ty[0];
             int dx = (int)tracker.last_x - (int)tracker.start_x;
-            if (!tracker.gesture_triggered && (now_ms - tracker.start_time_ms < 1000)) {
-                if (dx > 20) { // Highly sensitive swipe right
+            if (!tracker.gesture_triggered && (now_ms - tracker.start_time_ms < 700)) {
+                if (dx > 25) { // Swipe Right -> Previous Preset
                     tracker.gesture_triggered = true;
                     if (is_left) {
                         ESP_LOGI(TAG, "Left Touch Swipe RIGHT -> Prev Preset");
@@ -94,7 +91,7 @@ static void ProcessTouchInput(esp_lcd_touch_handle_t tp, TouchTracker& tracker, 
                         ESP_LOGI(TAG, "Right Touch Swipe RIGHT -> Prev Preset");
                         DisplayManager::CycleRightEyeBackwards();
                     }
-                } else if (dx < -20) { // Highly sensitive swipe left
+                } else if (dx < -25) { // Swipe Left -> Next Preset
                     tracker.gesture_triggered = true;
                     if (is_left) {
                         ESP_LOGI(TAG, "Left Touch Swipe LEFT -> Next Preset");
@@ -108,8 +105,7 @@ static void ProcessTouchInput(esp_lcd_touch_handle_t tp, TouchTracker& tracker, 
         }
     } else {
         if (tracker.is_touching) {
-            // Finger released: if not already swiped, trigger tap!
-            if (!tracker.gesture_triggered && (now_ms - tracker.start_time_ms < 1000)) {
+            if (!tracker.gesture_triggered && (now_ms - tracker.start_time_ms < 500)) {
                 if (is_left) {
                     ESP_LOGI(TAG, "Left Screen TAPPED -> Cycling Left Eye");
                     DisplayManager::CycleLeftEye();
