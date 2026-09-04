@@ -60,6 +60,13 @@ Or with `esptool.py` directly:
 python -m esptool --chip esp32s3 -b 460800 --before default_reset --after hard_reset write_flash --flash_mode dio --flash_size 16MB --flash_freq 80m 0x0 build\bootloader\bootloader.bin 0x8000 build\partition_table\partition-table.bin 0xd000 build\ota_data_initial.bin 0x20000 build\xiaozhi.bin 0x800000 build\generated_assets.bin
 ```
 
+### Option 3: Instant Golden Checkpoint Recovery
+To revert immediately to the canonical tested build with "Hi ESP" wake word, English/Taiwanese persona, Wi-Fi credentials, and all 10 presets:
+```powershell
+python checkpoints/restore_working_build.py COM13
+```
+See [`checkpoints/CHECKPOINT_REGISTRY.md`](../checkpoints/CHECKPOINT_REGISTRY.md) for full history and partition breakdown.
+
 ---
 
 ## 4. Uncanny Eye Presets Pack
