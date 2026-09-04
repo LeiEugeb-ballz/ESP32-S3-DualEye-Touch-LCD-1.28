@@ -59,13 +59,14 @@ void UncannyEyeRenderer::RenderChunk(uint16_t* dest_buffer, int y_start, int num
 
     // Precalculate 128-entry radial stretch LUT for current frame (0 FPU in inner loop)
     uint8_t v_lut[128];
-    float iris_active_range = (float)(iris_h - 1 - pupil_r);
-    float inv_active_range = (iris_active_range > 0.01f) ? (1.0f / iris_active_range) : 1.0f;
+    float iris_screen_span = 127.0f - (float)pupil_r;
+    float inv_screen_span = (iris_screen_span > 1.0f) ? (1.0f / iris_screen_span) : 1.0f;
     for (int v = 0; v < 128; v++) {
         if (v < pupil_r) {
             v_lut[v] = 0xFF; // Pupil marker
         } else {
-            int tex_v = (int)(((float)(v - pupil_r) * inv_active_range) * (float)(iris_h - 1));
+            float norm = (float)(v - pupil_r) * inv_screen_span;
+            int tex_v = (int)(norm * (float)(iris_h - 1));
             if (tex_v < 0) tex_v = 0;
             if (tex_v >= iris_h) tex_v = iris_h - 1;
             v_lut[v] = (uint8_t)tex_v;
@@ -120,14 +121,17 @@ void UncannyEyeRenderer::RenderChunk(uint16_t* dest_buffer, int y_start, int num
                 uint16_t p = polar_row[lut_x];
                 if (p != 0) {
                     uint8_t u_raw = (uint8_t)(p >> 8);
-                    uint8_t v = (uint8_t)((p & 0xFF) - 1);
+                    uint8_t v_raw = (uint8_t)(p & 0xFF);
+                    uint8_t v = (v_raw > 0) ? (v_raw - 1) : 0;
+                    if (v > 127) v = 127;
                     uint8_t tex_v = v_lut[v];
 
                     if (tex_v == 0xFF) {
                         pixel_color = 0x0821; // Pupil black (#101014)
                     } else {
-                        uint32_t u_coord = (iris_w == 1) ? 0 : ((uint32_t)u_raw * iris_w) >> 8;
+                        uint32_t u_coord = (iris_w == 1) ? 0 : (((uint32_t)u_raw * iris_w) >> 8);
                         if (u_coord >= iris_w) u_coord = iris_w - 1;
+                        if (tex_v >= iris_h) tex_v = iris_h - 1;
                         uint16_t iris_color = iris[(uint32_t)tex_v * iris_w + u_coord];
                         if (v >= 124) {
                             uint16_t alpha = (uint16_t)((128 - v) << 6); // [0..256]

@@ -114,13 +114,14 @@ for key, fname, display_name in presets_info:
     
     s_w = defs.get("SCLERA_WIDTH", 200)
     s_h = defs.get("SCLERA_HEIGHT", 200)
-    i_w = defs.get("IRIS_WIDTH", defs.get("IRIS_MAP_WIDTH", 256))
-    i_h = defs.get("IRIS_HEIGHT", defs.get("IRIS_MAP_HEIGHT", 64))
+    i_w = defs.get("IRIS_MAP_WIDTH", defs.get("IRIS_WIDTH", 256))
+    i_h = defs.get("IRIS_MAP_HEIGHT", defs.get("IRIS_HEIGHT", 64))
     
     if key == "Japanese":
         p_r = 38
     else:
-        p_r = defs.get("IRIS_MIN", 32)
+        raw_min = defs.get("IRIS_MIN", 32)
+        p_r = raw_min if raw_min <= 45 else 30
     
     print(f"Writing {key}: sclera {s_w}x{s_h} ({len(sclera)}), iris {i_w}x{i_h} ({len(iris)})")
     

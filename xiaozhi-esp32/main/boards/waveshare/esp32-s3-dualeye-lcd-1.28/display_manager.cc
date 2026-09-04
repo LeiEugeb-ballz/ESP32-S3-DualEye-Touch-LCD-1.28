@@ -288,6 +288,30 @@ void DisplayManager::EyeRenderTask(void* arg) {
         uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
         EyeAnimationState state = current_state_.load(std::memory_order_relaxed);
 
+        // 0. Safely apply pending preset transitions between frames on render core
+        static int s_applied_left_preset = -1;
+        static int s_applied_right_preset = -1;
+
+        int target_left = s_left_preset_id.load(std::memory_order_acquire);
+        if (target_left != s_applied_left_preset) {
+            s_applied_left_preset = target_left;
+            const EyeRenderer::EyeAssetConfig* asset = EyeRenderer::GetEyePreset((EyeRenderer::EyePresetId)target_left);
+            if (!displays_.empty() && displays_[0] && asset) {
+                displays_[0]->SetAsset(asset);
+                ESP_LOGI(TAG, "Applied LEFT eye preset [%d]: %s on render core", target_left, asset->name);
+            }
+        }
+
+        int target_right = s_right_preset_id.load(std::memory_order_acquire);
+        if (target_right != s_applied_right_preset) {
+            s_applied_right_preset = target_right;
+            const EyeRenderer::EyeAssetConfig* asset = EyeRenderer::GetEyePreset((EyeRenderer::EyePresetId)target_right);
+            if (displays_.size() > 1 && displays_[1] && asset) {
+                displays_[1]->SetAsset(asset);
+                ESP_LOGI(TAG, "Applied RIGHT eye preset [%d]: %s on render core", target_right, asset->name);
+            }
+        }
+
         // 1. Bodmer Ballistic Saccade & Natural Exploration Gaze Engine
         static bool eye_in_motion = false;
         static float eye_start_x = 0.0f, eye_start_y = 0.0f;
@@ -364,8 +388,8 @@ void DisplayManager::EyeRenderTask(void* arg) {
         if (effective_pupil < 20.0f) effective_pupil = 20.0f;
 
         // 3. Anatomical Eyelid Pitch Tracking & Blinking (Human Blue & Owl Amber only)
-        int left_pid = s_left_preset_id.load(std::memory_order_relaxed);
-        int right_pid = s_right_preset_id.load(std::memory_order_relaxed);
+        int left_pid = s_applied_left_preset;
+        int right_pid = s_applied_right_preset;
 
         bool left_has_eyelids = (left_pid == EyeRenderer::PRESET_DEFAULT || left_pid == EyeRenderer::PRESET_JAPANESE || left_pid == EyeRenderer::PRESET_OWL);
         bool right_has_eyelids = (right_pid == EyeRenderer::PRESET_DEFAULT || right_pid == EyeRenderer::PRESET_JAPANESE || right_pid == EyeRenderer::PRESET_OWL);
@@ -483,6 +507,7 @@ void DisplayManager::EyeRenderTask(void* arg) {
         } else if (std::abs(slide_l) > 0.1f) {
             gaze_x_l += slide_l;
         }
+        gaze_x_l = std::clamp(gaze_x_l, -30.0f, 30.0f);
 
         float gaze_x_r = current_gaze_x_ + micro_tremor_x - 1.8f;
         if (s_dragging_right.load(std::memory_order_relaxed)) {
@@ -491,6 +516,7 @@ void DisplayManager::EyeRenderTask(void* arg) {
         } else if (std::abs(slide_r) > 0.1f) {
             gaze_x_r += slide_r;
         }
+        gaze_x_r = std::clamp(gaze_x_r, -30.0f, 30.0f);
 
         // Binocular vergence (+1.8px inward on left, -1.8px inward on right)
         EyeRenderer::RenderParams params_left;
@@ -538,22 +564,16 @@ void DisplayManager::GetBenchmarkMetrics(uint32_t& eye1_us, uint32_t& both_us) {
 
 void DisplayManager::SetLeftEyePreset(int preset_id) {
     int id = (preset_id >= 0 && preset_id < EyeRenderer::PRESET_COUNT) ? preset_id : 0;
-    s_left_preset_id.store(id, std::memory_order_relaxed);
+    s_left_preset_id.store(id, std::memory_order_release);
     const EyeRenderer::EyeAssetConfig* asset = EyeRenderer::GetEyePreset((EyeRenderer::EyePresetId)id);
-    ESP_LOGI(TAG, "Switched LEFT eye to preset [%d]: %s", id, asset ? asset->name : "Default");
-    if (!displays_.empty() && displays_[0]) {
-        displays_[0]->SetAsset(asset);
-    }
+    ESP_LOGI(TAG, "Requested LEFT eye preset [%d]: %s (delegated to render core)", id, asset ? asset->name : "Default");
 }
 
 void DisplayManager::SetRightEyePreset(int preset_id) {
     int id = (preset_id >= 0 && preset_id < EyeRenderer::PRESET_COUNT) ? preset_id : 0;
-    s_right_preset_id.store(id, std::memory_order_relaxed);
+    s_right_preset_id.store(id, std::memory_order_release);
     const EyeRenderer::EyeAssetConfig* asset = EyeRenderer::GetEyePreset((EyeRenderer::EyePresetId)id);
-    ESP_LOGI(TAG, "Switched RIGHT eye to preset [%d]: %s", id, asset ? asset->name : "Default");
-    if (displays_.size() > 1 && displays_[1]) {
-        displays_[1]->SetAsset(asset);
-    }
+    ESP_LOGI(TAG, "Requested RIGHT eye preset [%d]: %s (delegated to render core)", id, asset ? asset->name : "Default");
 }
 
 void DisplayManager::SetEyePreset(int preset_id, const std::string& target) {
@@ -617,7 +637,7 @@ void DisplayManager::SetTouchHandles(esp_lcd_touch_handle_t tp1, esp_lcd_touch_h
 
     static TaskHandle_t s_touch_task = nullptr;
     if (!s_touch_task && (tp1 || tp2)) {
-        xTaskCreatePinnedToCore(TouchPollingTask, "touch_poll", 3072, nullptr, 2, &s_touch_task, 0);
+        xTaskCreatePinnedToCore(TouchPollingTask, "touch_poll", 4096, nullptr, 2, &s_touch_task, 0);
         ESP_LOGI(TAG, "Touch Polling Task started on Core 0 (Priority 2, 100Hz)");
     }
 }
