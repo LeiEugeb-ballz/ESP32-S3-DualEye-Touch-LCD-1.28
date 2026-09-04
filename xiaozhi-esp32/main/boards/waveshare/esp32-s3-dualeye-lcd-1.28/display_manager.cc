@@ -387,21 +387,28 @@ void DisplayManager::EyeRenderTask(void* arg) {
         if (effective_pupil > 40.0f) effective_pupil = 40.0f;
         if (effective_pupil < 20.0f) effective_pupil = 20.0f;
 
-        // 3. Anatomical Eyelid Pitch Tracking & Blinking (Human Blue & Owl Amber only)
+        // 3. Anatomical Eyelid Pitch Tracking & Blinking (Authentic Bodmer Uncanny Eyes)
         int left_pid = s_applied_left_preset;
         int right_pid = s_applied_right_preset;
 
-        bool left_has_eyelids = (left_pid == EyeRenderer::PRESET_DEFAULT || left_pid == EyeRenderer::PRESET_JAPANESE || left_pid == EyeRenderer::PRESET_OWL);
-        bool right_has_eyelids = (right_pid == EyeRenderer::PRESET_DEFAULT || right_pid == EyeRenderer::PRESET_JAPANESE || right_pid == EyeRenderer::PRESET_OWL);
+        // All assets except full-bleed dragon (PRESET_NO_SCLERA) have authentic eyelid rendering
+        bool left_has_eyelids = (left_pid != EyeRenderer::PRESET_NO_SCLERA);
+        bool right_has_eyelids = (right_pid != EyeRenderer::PRESET_NO_SCLERA);
         bool either_has_eyelids = (left_has_eyelids || right_has_eyelids);
 
         float render_u_thresh = 0.0f;
         float render_l_thresh = 0.0f;
 
         if (either_has_eyelids) {
-            // Resting posture creates the almond ocular socket from Bodmer's uncanny eyes
+            // Resting posture creates the almond ocular socket from Bodmer's uncanny eyes (Photo 1 Cat, Photo 2 Human)
             float target_u_thresh = 110.0f + (current_gaze_y_ * 2.2f);
             float target_l_thresh = 45.0f - (current_gaze_y_ * 0.8f);
+
+            // Owl Amber uses wide nocturnal aperture matching Photo 3
+            if (left_pid == EyeRenderer::PRESET_OWL || right_pid == EyeRenderer::PRESET_OWL) {
+                target_u_thresh = 20.0f;
+                target_l_thresh = 20.0f;
+            }
 
             // Emotion-specific Eyelid Modulations
             if (state == EYE_STATE_LISTENING) {

@@ -551,7 +551,7 @@
 
     // Preset configurations with authentic Uncanny Eyes color palettes & geometry
     const presets = [
-      { // 0: Human Blue (Photorealistic striated fibrous iris + upper/lower curved eyelids)
+      { // 0: Human Blue (Photorealistic striated fibrous iris + almond curved eyelids matching User Photo 2)
         scleraColor: '#e2e8f0',
         irisBase: [25, 80, 180],
         irisHighlight: [130, 200, 255],
@@ -559,9 +559,11 @@
         pupilSlit: false,
         pupilSize: 28,
         hasEyelids: true,
+        restingUpper: 0.36,
+        restingLower: 0.20,
         veins: true
       },
-      { // 1: Cat Yellow (Vibrant yellow/amber striated iris + sharp black vertical slit pupil)
+      { // 1: Cat Yellow (Vibrant yellow/amber striated iris + vertical slit pupil + feline almond eyelids matching User Photo 1)
         scleraColor: '#fef08a',
         irisBase: [215, 150, 10],
         irisHighlight: [250, 220, 40],
@@ -569,9 +571,11 @@
         pupilSlit: true,
         pupilSize: 34,
         hasEyelids: true,
+        restingUpper: 0.44,
+        restingLower: 0.28,
         veins: false
       },
-      { // 2: Dragon Fire (Fiery crimson/orange gradient + vertical slit pupil)
+      { // 2: Dragon Fire (Fiery crimson/orange gradient + vertical slit pupil + hooded eyelids)
         scleraColor: '#fee2e2',
         irisBase: [185, 28, 28],
         irisHighlight: [249, 115, 22],
@@ -579,6 +583,8 @@
         pupilSlit: true,
         pupilSize: 32,
         hasEyelids: true,
+        restingUpper: 0.42,
+        restingLower: 0.26,
         veins: true
       },
       { // 3: Cyborg Red (Dark matte sclera + illuminated concentric red cyber iris)
@@ -589,6 +595,8 @@
         pupilSlit: false,
         pupilSize: 26,
         hasEyelids: false,
+        restingUpper: 0,
+        restingLower: 0,
         veins: false
       },
       { // 4: Doe Anime (Soft anime iris with large expressive pupil)
@@ -599,9 +607,11 @@
         pupilSlit: false,
         pupilSize: 38,
         hasEyelids: true,
+        restingUpper: 0.28,
+        restingLower: 0.16,
         veins: false
       },
-      { // 5: Owl Amber (Golden-amber iris, dark perimeter ring, wide nocturnal pupil)
+      { // 5: Owl Amber (Golden-amber iris, dark perimeter ring, wide nocturnal opening matching User Photo 3)
         scleraColor: '#1e1b4b',
         irisBase: [217, 119, 6],
         irisHighlight: [251, 191, 36],
@@ -609,6 +619,8 @@
         pupilSlit: false,
         pupilSize: 42,
         hasEyelids: true,
+        restingUpper: 0.05,
+        restingLower: 0.05,
         veins: false
       },
       { // 6: Goat Horizontal (Warm amber iris with horizontal oblong pupil)
@@ -620,6 +632,8 @@
         pupilHorizontal: true,
         pupilSize: 32,
         hasEyelids: true,
+        restingUpper: 0.36,
+        restingLower: 0.22,
         veins: false
       },
       { // 7: Monster Nauga (Alien deep indigo/violet mottled iris)
@@ -630,6 +644,8 @@
         pupilSlit: false,
         pupilSize: 30,
         hasEyelids: false,
+        restingUpper: 0,
+        restingLower: 0,
         veins: true
       },
       { // 8: Newt Orange (Textured amphibian orange/gold iris)
@@ -640,6 +656,8 @@
         pupilSlit: false,
         pupilSize: 30,
         hasEyelids: true,
+        restingUpper: 0.38,
+        restingLower: 0.22,
         veins: false
       },
       { // 9: Dragon Full (Full-bleed sclera coverage slit eye)
@@ -650,6 +668,8 @@
         pupilSlit: true,
         pupilSize: 38,
         hasEyelids: false,
+        restingUpper: 0,
+        restingLower: 0,
         veins: false
       }
     ];
@@ -768,27 +788,37 @@
       ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
       ctx.fill();
 
-      // 5. Authentic Curved Eyelids (Matches Bodmer's parabolic eyelid equations)
+      // 5. Authentic Curved Eyelids (Matches Bodmer's parabolic eyelid equations & User Photos)
       if (conf.hasEyelids) {
         ctx.fillStyle = '#05070a';
 
-        // Upper Eyelid curve
-        const topY = 120 * upperLid;
+        // Gaze pitch tracking: when looking down (gazeY > 0), upper lid naturally drops down
+        const pitchUpper = (gazeY / 30.0) * 0.12;
+        const pitchLower = -(gazeY / 30.0) * 0.05;
+
+        // Effective lid threshold: resting posture + blink closure (interpolated from rest to 1.0)
+        const restU = conf.restingUpper || 0.35;
+        const restL = conf.restingLower || 0.20;
+        const effectiveUpper = Math.max(0.0, Math.min(1.0, restU + (1.0 - restU) * upperLid + pitchUpper));
+        const effectiveLower = Math.max(0.0, Math.min(1.0, restL + (1.0 - restL) * lowerLid + pitchLower));
+
+        // Upper Eyelid curve (parabolic arch)
+        const topY = 120 * effectiveUpper;
         ctx.beginPath();
         ctx.moveTo(0, 0);
         ctx.lineTo(240, 0);
         ctx.lineTo(240, topY);
-        ctx.quadraticCurveTo(120, topY + 45 * upperLid, 0, topY);
+        ctx.quadraticCurveTo(120, topY + 42 * effectiveUpper, 0, topY);
         ctx.closePath();
         ctx.fill();
 
-        // Lower Eyelid curve
-        const botY = 240 - (120 * lowerLid);
+        // Lower Eyelid curve (gentle upward arch)
+        const botY = 240 - (120 * effectiveLower);
         ctx.beginPath();
         ctx.moveTo(0, 240);
         ctx.lineTo(240, 240);
         ctx.lineTo(240, botY);
-        ctx.quadraticCurveTo(120, botY - 30 * lowerLid, 0, botY);
+        ctx.quadraticCurveTo(120, botY - 26 * effectiveLower, 0, botY);
         ctx.closePath();
         ctx.fill();
       }
@@ -810,16 +840,18 @@
         lastSaccade = Date.now();
       }
 
-      // Blink handling
+      // Authentic Bodmer Asymmetric Blink: fast 40ms closure, 20ms seal, 90ms ease-out opening
       if (isBlinking) {
         upperLid += 0.25;
-        lowerLid += 0.18;
+        lowerLid += 0.20;
         if (upperLid >= 1.0) {
+          upperLid = 1.0;
+          lowerLid = 1.0;
           isBlinking = false;
         }
       } else if (upperLid > 0) {
-        upperLid -= 0.18;
-        lowerLid -= 0.14;
+        upperLid -= 0.16;
+        lowerLid -= 0.12;
         if (upperLid < 0) {
           upperLid = 0;
           lowerLid = 0;
