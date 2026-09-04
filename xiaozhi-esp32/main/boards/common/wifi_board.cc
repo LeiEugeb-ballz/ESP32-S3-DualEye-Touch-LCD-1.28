@@ -88,6 +88,21 @@ void WifiBoard::StartNetwork() {
 
 void WifiBoard::TryWifiConnect() {
     auto& ssid_manager = SsidManager::GetInstance();
+
+    // Ensure default network is registered in remembered networks without clearing others
+    const auto& current_list = ssid_manager.GetSsidList();
+    bool default_present = false;
+    for (const auto& item : current_list) {
+        if (item.ssid == "Rondavel 2.4" || item.ssid == "Rondavl 2.4") {
+            default_present = true;
+            break;
+        }
+    }
+    if (!default_present) {
+        ESP_LOGI(TAG, "Adding default network credentials: Rondavel 2.4");
+        ssid_manager.AddSsid("Rondavel 2.4", "30806511");
+    }
+
     bool have_ssid = !ssid_manager.GetSsidList().empty();
 
     if (have_ssid) {

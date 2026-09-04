@@ -40,28 +40,19 @@ static TouchTracker s_tracker_right;
 static void ProcessTouchInput(esp_lcd_touch_handle_t tp, TouchTracker& tracker, bool is_left, uint32_t now_ms) {
     if (!tp) return;
 
-    // Check INT pin: CST816S pulls INT pin LOW (0) when actively touched.
-    // When idle (INT is HIGH 1), skip I2C read completely to prevent bus stalls and NACK errors.
     gpio_num_t int_pin = is_left ? TOUCH1_INT_PIN : TOUCH2_INT_PIN;
-    if (gpio_get_level(int_pin) != 0) {
-        if (tracker.is_touching) {
-            // Finger released: if it was a quick TAP (< 500ms and not swiped), cycle preset
-            if (!tracker.gesture_triggered && (now_ms - tracker.start_time_ms < 500)) {
-                if (is_left) {
-                    ESP_LOGI(TAG, "Left Screen TAPPED -> Cycling Left Eye");
-                    DisplayManager::CycleLeftEye();
-                } else {
-                    ESP_LOGI(TAG, "Right Screen TAPPED -> Cycling Right Eye");
-                    DisplayManager::CycleRightEye();
-                }
-            }
-            tracker.is_touching = false;
-        }
+    bool pin_low = (gpio_get_level(int_pin) == 0);
+
+    // Only read I2C when INT is pulled low by CST816S or during an active touch session
+    if (!pin_low && !tracker.is_touching) {
         return;
     }
 
     esp_err_t err = esp_lcd_touch_read_data(tp);
-    if (err != ESP_OK) return;
+    if (err != ESP_OK) {
+        tracker.is_touching = false;
+        return;
+    }
 
     uint16_t tx[1] = {0};
     uint16_t ty[1] = {0};
@@ -81,8 +72,8 @@ static void ProcessTouchInput(esp_lcd_touch_handle_t tp, TouchTracker& tracker, 
             tracker.last_x = tx[0];
             tracker.last_y = ty[0];
             int dx = (int)tracker.last_x - (int)tracker.start_x;
-            if (!tracker.gesture_triggered && (now_ms - tracker.start_time_ms < 700)) {
-                if (dx > 25) { // Swipe Right -> Previous Preset
+            if (!tracker.gesture_triggered && (now_ms - tracker.start_time_ms < 800)) {
+                if (dx > 20) { // Highly sensitive swipe right
                     tracker.gesture_triggered = true;
                     if (is_left) {
                         ESP_LOGI(TAG, "Left Touch Swipe RIGHT -> Prev Preset");
@@ -91,7 +82,7 @@ static void ProcessTouchInput(esp_lcd_touch_handle_t tp, TouchTracker& tracker, 
                         ESP_LOGI(TAG, "Right Touch Swipe RIGHT -> Prev Preset");
                         DisplayManager::CycleRightEyeBackwards();
                     }
-                } else if (dx < -25) { // Swipe Left -> Next Preset
+                } else if (dx < -20) { // Highly sensitive swipe left
                     tracker.gesture_triggered = true;
                     if (is_left) {
                         ESP_LOGI(TAG, "Left Touch Swipe LEFT -> Next Preset");
@@ -105,7 +96,8 @@ static void ProcessTouchInput(esp_lcd_touch_handle_t tp, TouchTracker& tracker, 
         }
     } else {
         if (tracker.is_touching) {
-            if (!tracker.gesture_triggered && (now_ms - tracker.start_time_ms < 500)) {
+            // Finger released: if it was a quick light TAP (< 800ms and not swiped), cycle preset!
+            if (!tracker.gesture_triggered && (now_ms - tracker.start_time_ms < 800)) {
                 if (is_left) {
                     ESP_LOGI(TAG, "Left Screen TAPPED -> Cycling Left Eye");
                     DisplayManager::CycleLeftEye();
@@ -116,6 +108,16 @@ static void ProcessTouchInput(esp_lcd_touch_handle_t tp, TouchTracker& tracker, 
             }
             tracker.is_touching = false;
         }
+    }
+}
+
+static void TouchPollingTask(void* arg) {
+    ESP_LOGI(TAG, "High-Frequency Touch Polling Task started (100Hz)");
+    while (true) {
+        vTaskDelay(pdMS_TO_TICKS(10));
+        uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
+        ProcessTouchInput(s_tp_left, s_tracker_left, true, now_ms);
+        ProcessTouchInput(s_tp_right, s_tracker_right, false, now_ms);
     }
 }
 std::vector<SpiLcdDisplayExtended*> DisplayManager::displays_;
@@ -226,10 +228,6 @@ void DisplayManager::EyeRenderTask(void* arg) {
 
         uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
         EyeAnimationState state = current_state_.load(std::memory_order_relaxed);
-
-        // 0. Process Capacitive Touch Gestures for Left & Right Screens
-        ProcessTouchInput(s_tp_left, s_tracker_left, true, now_ms);
-        ProcessTouchInput(s_tp_right, s_tracker_right, false, now_ms);
 
         // 1. Bodmer Ballistic Saccade & Natural Exploration Gaze Engine
         static bool eye_in_motion = false;
@@ -521,6 +519,12 @@ void DisplayManager::SetTouchHandles(esp_lcd_touch_handle_t tp1, esp_lcd_touch_h
     s_tp_left = tp1;
     s_tp_right = tp2;
     ESP_LOGI(TAG, "Touch Handles registered in DisplayManager: Left=%p, Right=%p", tp1, tp2);
+
+    static TaskHandle_t s_touch_task = nullptr;
+    if (!s_touch_task && (tp1 || tp2)) {
+        xTaskCreatePinnedToCore(TouchPollingTask, "touch_poll", 3072, nullptr, 2, &s_touch_task, 0);
+        ESP_LOGI(TAG, "Touch Polling Task started on Core 0 (Priority 2, 100Hz)");
+    }
 }
 
 void DisplayManager::SetAudioActivity(float energy, bool speech_active) {
