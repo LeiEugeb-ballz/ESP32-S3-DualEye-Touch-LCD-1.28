@@ -62,17 +62,38 @@ Activate the ESP-IDF toolchain for your platform:
 . $env:IDF_PATH\export.ps1
 ```
 
-### 2. Compilation
+### 2. Safe local compilation
+
+On Windows, use the checked-in build wrapper. It creates a temporary short drive alias before invoking ESP-IDF, avoiding failures from spaces in paths such as `Project TakeOver` and reducing Windows object-path length risk.
+
+```powershell
+pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\build_firmware.ps1
+```
+
+The default output directory is `build_safe/`. This is a build-only command; it does not flash hardware.
+
+If your ESP-IDF install is not in `C:\Espressif\frameworks\esp-idf`, set `IDF_PATH` first.
+
+### 3. Direct ESP-IDF compilation
+
+Use this only when your checkout path has no spaces and is short enough for Windows object paths:
+
 ```powershell
 idf.py build
 ```
 
-### 3. Wireless Flash (OTA)
+### 4. Wireless Flash (OTA)
+
+Only run this when you intentionally want to update a connected board.
+
 ```bash
 python push_ota.py <BOARD_IP_ADDRESS> build/xiaozhi.bin
 ```
 
-### 4. Physical USB Flash (Recovery)
+### 5. Physical USB Flash (Recovery)
+
+Only run this when you intentionally want to write firmware over USB.
+
 ```powershell
 idf.py -p COM13 flash monitor
 ```

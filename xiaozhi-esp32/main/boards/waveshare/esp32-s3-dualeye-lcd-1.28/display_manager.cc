@@ -15,6 +15,8 @@
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <cctype>
+#include <mutex>
 
 static const char* TAG = "DualEyeDisplay";
 
@@ -43,6 +45,132 @@ static std::atomic<float> s_drag_dx_right{0.0f};
 static std::atomic<bool> s_dragging_right{false};
 static std::atomic<float> s_slide_offset_left{0.0f};
 static std::atomic<float> s_slide_offset_right{0.0f};
+static std::mutex s_chat_mutex;
+static std::string s_chat_role;
+static std::string s_chat_text;
+static uint32_t s_chat_until_ms = 0;
+
+static inline uint16_t DmaRgb565(uint16_t color) {
+    return (uint16_t)((color >> 8) | (color << 8));
+}
+
+static const uint8_t* Glyph3x5(char ch) {
+    static const uint8_t blank[5] = {0, 0, 0, 0, 0};
+    static const uint8_t qmark[5] = {7, 1, 3, 0, 2};
+    switch (ch) {
+        case '0': { static const uint8_t g[5] = {7, 5, 5, 5, 7}; return g; }
+        case '1': { static const uint8_t g[5] = {2, 6, 2, 2, 7}; return g; }
+        case '2': { static const uint8_t g[5] = {7, 1, 7, 4, 7}; return g; }
+        case '3': { static const uint8_t g[5] = {7, 1, 7, 1, 7}; return g; }
+        case '4': { static const uint8_t g[5] = {5, 5, 7, 1, 1}; return g; }
+        case '5': { static const uint8_t g[5] = {7, 4, 7, 1, 7}; return g; }
+        case '6': { static const uint8_t g[5] = {7, 4, 7, 5, 7}; return g; }
+        case '7': { static const uint8_t g[5] = {7, 1, 2, 2, 2}; return g; }
+        case '8': { static const uint8_t g[5] = {7, 5, 7, 5, 7}; return g; }
+        case '9': { static const uint8_t g[5] = {7, 5, 7, 1, 7}; return g; }
+        case 'A': { static const uint8_t g[5] = {7, 5, 7, 5, 5}; return g; }
+        case 'B': { static const uint8_t g[5] = {6, 5, 6, 5, 6}; return g; }
+        case 'C': { static const uint8_t g[5] = {7, 4, 4, 4, 7}; return g; }
+        case 'D': { static const uint8_t g[5] = {6, 5, 5, 5, 6}; return g; }
+        case 'E': { static const uint8_t g[5] = {7, 4, 6, 4, 7}; return g; }
+        case 'F': { static const uint8_t g[5] = {7, 4, 6, 4, 4}; return g; }
+        case 'G': { static const uint8_t g[5] = {7, 4, 5, 5, 7}; return g; }
+        case 'H': { static const uint8_t g[5] = {5, 5, 7, 5, 5}; return g; }
+        case 'I': { static const uint8_t g[5] = {7, 2, 2, 2, 7}; return g; }
+        case 'J': { static const uint8_t g[5] = {1, 1, 1, 5, 7}; return g; }
+        case 'K': { static const uint8_t g[5] = {5, 5, 6, 5, 5}; return g; }
+        case 'L': { static const uint8_t g[5] = {4, 4, 4, 4, 7}; return g; }
+        case 'M': { static const uint8_t g[5] = {5, 7, 7, 5, 5}; return g; }
+        case 'N': { static const uint8_t g[5] = {5, 7, 7, 7, 5}; return g; }
+        case 'O': { static const uint8_t g[5] = {7, 5, 5, 5, 7}; return g; }
+        case 'P': { static const uint8_t g[5] = {7, 5, 7, 4, 4}; return g; }
+        case 'Q': { static const uint8_t g[5] = {7, 5, 5, 7, 1}; return g; }
+        case 'R': { static const uint8_t g[5] = {7, 5, 7, 6, 5}; return g; }
+        case 'S': { static const uint8_t g[5] = {7, 4, 7, 1, 7}; return g; }
+        case 'T': { static const uint8_t g[5] = {7, 2, 2, 2, 2}; return g; }
+        case 'U': { static const uint8_t g[5] = {5, 5, 5, 5, 7}; return g; }
+        case 'V': { static const uint8_t g[5] = {5, 5, 5, 5, 2}; return g; }
+        case 'W': { static const uint8_t g[5] = {5, 5, 7, 7, 5}; return g; }
+        case 'X': { static const uint8_t g[5] = {5, 5, 2, 5, 5}; return g; }
+        case 'Y': { static const uint8_t g[5] = {5, 5, 2, 2, 2}; return g; }
+        case 'Z': { static const uint8_t g[5] = {7, 1, 2, 4, 7}; return g; }
+        case ':': { static const uint8_t g[5] = {0, 2, 0, 2, 0}; return g; }
+        case '.': { static const uint8_t g[5] = {0, 0, 0, 0, 2}; return g; }
+        case ',': { static const uint8_t g[5] = {0, 0, 0, 2, 4}; return g; }
+        case '!': { static const uint8_t g[5] = {2, 2, 2, 0, 2}; return g; }
+        case '?': return qmark;
+        case '-': { static const uint8_t g[5] = {0, 0, 7, 0, 0}; return g; }
+        case '/': { static const uint8_t g[5] = {1, 1, 2, 4, 4}; return g; }
+        case '_': { static const uint8_t g[5] = {0, 0, 0, 0, 7}; return g; }
+        case ' ': return blank;
+        default: return qmark;
+    }
+}
+
+static void DrawGlyph3x5(uint16_t* buf, int chunk_y, int x, int y, char ch, uint16_t color) {
+    if (ch >= 'a' && ch <= 'z') ch = (char)std::toupper((unsigned char)ch);
+    const uint8_t* rows = Glyph3x5(ch);
+    for (int gy = 0; gy < 5; ++gy) {
+        for (int gx = 0; gx < 3; ++gx) {
+            if ((rows[gy] & (1 << (2 - gx))) == 0) continue;
+            for (int sy = 0; sy < 2; ++sy) {
+                int py = y + gy * 2 + sy;
+                if (py < chunk_y || py >= chunk_y + 20 || py < 0 || py >= 240) continue;
+                for (int sx = 0; sx < 2; ++sx) {
+                    int px = x + gx * 2 + sx;
+                    if (px < 0 || px >= 240) continue;
+                    buf[(py - chunk_y) * 240 + px] = color;
+                }
+            }
+        }
+    }
+}
+
+static void DrawChatOverlay(uint16_t* buf, int chunk_y) {
+    if (chunk_y + 20 <= 204) return;
+
+    std::string role;
+    std::string text;
+    {
+        std::lock_guard<std::mutex> lock(s_chat_mutex);
+        uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
+        if (s_chat_text.empty() || now_ms > s_chat_until_ms) return;
+        role = s_chat_role;
+        text = s_chat_text;
+    }
+
+    std::string line;
+    if (role.find("user") != std::string::npos) {
+        line = "U: ";
+    } else if (role.find("assistant") != std::string::npos) {
+        line = "A: ";
+    }
+    line += text;
+    if (line.size() > 28) {
+        line.resize(27);
+        line += ".";
+    }
+
+    const uint16_t bg = DmaRgb565(0x0000);
+    const uint16_t border = DmaRgb565(0x4208);
+    const uint16_t fg = DmaRgb565(role.find("user") != std::string::npos ? 0x07FF : 0xFFE0);
+
+    for (int py = 204; py < 236; ++py) {
+        if (py < chunk_y || py >= chunk_y + 20) continue;
+        uint16_t fill = (py == 204 || py == 235) ? border : bg;
+        int row = (py - chunk_y) * 240;
+        for (int px = 0; px < 240; ++px) {
+            buf[row + px] = fill;
+        }
+    }
+
+    int x = 8;
+    for (char ch : line) {
+        DrawGlyph3x5(buf, chunk_y, x, 213, ch, fg);
+        x += 8;
+        if (x > 232) break;
+    }
+}
 
 void DisplayManager::SlideEyeIn(bool is_left, float start_offset_x) {
     if (is_left) {
@@ -692,8 +820,22 @@ void DisplayManager::SetEmotion(const char* emotion) {
 
 void DisplayManager::ShowNotification(const char* message, int duration_ms) {}
 void DisplayManager::ShowNotification(const std::string& notification, int duration_ms) {}
-void DisplayManager::SetChatMessage(const char* role, const char* content) {}
-void DisplayManager::ClearChatMessages() {}
+void DisplayManager::SetChatMessage(const char* role, const char* content) {
+    std::lock_guard<std::mutex> lock(s_chat_mutex);
+    s_chat_role = role ? role : "";
+    s_chat_text = content ? content : "";
+    if (s_chat_text.size() > 96) {
+        s_chat_text.resize(96);
+    }
+    s_chat_until_ms = (uint32_t)(esp_timer_get_time() / 1000ULL) + 20000;
+}
+
+void DisplayManager::ClearChatMessages() {
+    std::lock_guard<std::mutex> lock(s_chat_mutex);
+    s_chat_role.clear();
+    s_chat_text.clear();
+    s_chat_until_ms = 0;
+}
 void DisplayManager::SetTheme(Theme* theme) {}
 Theme* DisplayManager::GetTheme() { return nullptr; }
 void DisplayManager::UpdateStatusBar(bool update_all) {}
@@ -800,6 +942,7 @@ void SpiLcdDisplayExtended::RenderEye(const EyeRenderer::RenderParams& params) {
     for (int y = 0; y < 240; y += kChunkLines) {
         uint16_t* active_buf = dma_buffer_[current_dma_buf_];
         eye_renderer_.RenderChunk(active_buf, y, kChunkLines, params, is_left_eye_);
+        DrawChatOverlay(active_buf, y);
         esp_lcd_panel_draw_bitmap(panel_, 0, y, 240, y + kChunkLines, active_buf);
         current_dma_buf_ = !current_dma_buf_;
     }
