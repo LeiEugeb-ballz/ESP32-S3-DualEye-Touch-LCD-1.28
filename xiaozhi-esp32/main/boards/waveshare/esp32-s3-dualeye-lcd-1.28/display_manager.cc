@@ -4,6 +4,7 @@
 #include "default_eye_asset.h"
 #include "eye_presets.h"
 #include "config.h"
+#include "assets/lang_config.h"
 #include <esp_log.h>
 #include <esp_heap_caps.h>
 #include <esp_random.h>
@@ -49,6 +50,108 @@ static std::mutex s_chat_mutex;
 static std::string s_chat_role;
 static std::string s_chat_text;
 static uint32_t s_chat_until_ms = 0;
+
+struct EyeBehaviorProfile {
+    float gaze_radius_x;
+    float gaze_radius_y;
+    uint32_t dwell_min_ms;
+    uint32_t dwell_span_ms;
+    uint32_t move_min_ms;
+    uint32_t move_span_ms;
+    float pupil_base;
+    float upper_lid_bias;
+    float lower_lid_bias;
+    uint32_t blink_min_ms;
+    uint32_t blink_span_ms;
+    uint8_t double_blink_chance;
+    float tremor_x;
+    float tremor_y;
+};
+
+static inline uint32_t RandRangeMs(uint32_t min_ms, uint32_t span_ms) {
+    return min_ms + (span_ms > 0 ? (esp_random() % span_ms) : 0);
+}
+
+static inline float RandUnit() {
+    return (float)(esp_random() % 1000) / 1000.0f;
+}
+
+static inline float RandSigned(float amplitude) {
+    return ((RandUnit() * 2.0f) - 1.0f) * amplitude;
+}
+
+static EyeBehaviorProfile GetEyeBehaviorProfile(EyeAnimationState state, bool speech_active) {
+    if (speech_active && state == EYE_STATE_IDLE) {
+        state = EYE_STATE_SPEAKING;
+    }
+
+    switch (state) {
+        case EYE_STATE_LISTENING:
+            // Low-amplitude fixation: looks at the user instead of wandering.
+            return {6.0f, 5.0f, 1200, 2200, 80, 70, 36.0f, -2.0f, 0.0f, 3600, 3200, 10, 0.7f, 0.5f};
+        case EYE_STATE_THINKING:
+            // Intentional off-centre glances while the model is processing.
+            return {18.0f, 10.0f, 500, 1300, 110, 120, 28.0f, 0.0f, 0.0f, 1800, 1800, 22, 0.9f, 0.6f};
+        case EYE_STATE_SPEAKING:
+            // Direct conversational gaze with small beat-to-beat movement.
+            return {10.0f, 6.0f, 350, 950, 75, 65, 33.0f, -6.0f, 6.0f, 2700, 2400, 12, 1.0f, 0.7f};
+        case EYE_STATE_HAPPY:
+            return {18.0f, 11.0f, 450, 1500, 70, 75, 34.0f, 0.0f, 0.0f, 2500, 2600, 18, 1.2f, 0.8f};
+        case EYE_STATE_SAD_SLEEPY:
+            return {10.0f, 8.0f, 1400, 2600, 120, 130, 27.0f, 0.0f, 4.0f, 1600, 1700, 28, 0.5f, 0.4f};
+        case EYE_STATE_ANGRY:
+            return {12.0f, 8.0f, 650, 1300, 90, 90, 30.0f, 22.0f, 24.0f, 2600, 2200, 8, 0.6f, 0.4f};
+        case EYE_STATE_SURPRISED:
+            return {8.0f, 5.0f, 900, 1600, 65, 70, 39.0f, 0.0f, 0.0f, 4200, 2600, 4, 1.1f, 0.8f};
+        case EYE_STATE_IDLE:
+        default:
+            return {24.0f, 18.0f, 700, 2100, 70, 80, 31.0f, 0.0f, 0.0f, 2500, 3200, 18, 1.4f, 1.0f};
+    }
+}
+
+static void PickConversationGaze(EyeAnimationState state, uint32_t state_age_ms, const EyeBehaviorProfile& profile,
+                                 float audio_energy, float& nx, float& ny) {
+    if (state == EYE_STATE_LISTENING) {
+        // Start with eye contact, then allow rare tiny glances so it does not look frozen.
+        bool locked_on_user = state_age_ms < 1600 || (esp_random() % 100) < 72;
+        nx = locked_on_user ? RandSigned(1.5f) : RandSigned(profile.gaze_radius_x);
+        ny = -4.0f + (locked_on_user ? RandSigned(1.2f) : RandSigned(profile.gaze_radius_y));
+        return;
+    }
+
+    if (state == EYE_STATE_SPEAKING) {
+        // Speech should feel addressed to the user: mostly centred, with tiny prosodic emphasis.
+        nx = RandSigned(profile.gaze_radius_x);
+        ny = -3.0f + RandSigned(profile.gaze_radius_y * 0.7f) - (audio_energy * 2.0f);
+        return;
+    }
+
+    if (state == EYE_STATE_THINKING) {
+        nx = ((esp_random() % 2) == 0 ? -1.0f : 1.0f) * (10.0f + RandUnit() * 8.0f);
+        ny = -8.0f - (RandUnit() * 5.0f);
+        return;
+    }
+
+    if (state == EYE_STATE_SAD_SLEEPY) {
+        nx = RandSigned(profile.gaze_radius_x * 0.55f);
+        ny = 5.0f + RandUnit() * profile.gaze_radius_y;
+        return;
+    }
+
+    if (state == EYE_STATE_ANGRY) {
+        nx = RandSigned(profile.gaze_radius_x * 0.7f);
+        ny = -2.0f + RandSigned(profile.gaze_radius_y * 0.35f);
+        return;
+    }
+
+    int attempts = 0;
+    do {
+        nx = RandSigned(profile.gaze_radius_x);
+        ny = RandSigned(profile.gaze_radius_y);
+        attempts++;
+    } while (((nx * nx) / (profile.gaze_radius_x * profile.gaze_radius_x) +
+              (ny * ny) / (profile.gaze_radius_y * profile.gaze_radius_y) > 1.0f) && attempts < 10);
+}
 
 static inline uint16_t DmaRgb565(uint16_t color) {
     return (uint16_t)((color >> 8) | (color << 8));
@@ -415,6 +518,22 @@ void DisplayManager::EyeRenderTask(void* arg) {
 
         uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000);
         EyeAnimationState state = current_state_.load(std::memory_order_relaxed);
+        float audio_energy = std::clamp(audio_energy_.load(std::memory_order_relaxed), 0.0f, 1.0f);
+        bool speech_active = speech_active_.load(std::memory_order_relaxed);
+        if (speech_active && state == EYE_STATE_IDLE) {
+            state = EYE_STATE_SPEAKING;
+        }
+        EyeBehaviorProfile behavior = GetEyeBehaviorProfile(state, speech_active);
+
+        static EyeAnimationState last_behavior_state = EYE_STATE_IDLE;
+        static uint32_t state_entered_ms = 0;
+        bool behavior_state_changed = false;
+        if (state != last_behavior_state) {
+            last_behavior_state = state;
+            state_entered_ms = now_ms;
+            behavior_state_changed = true;
+        }
+        uint32_t state_age_ms = now_ms - state_entered_ms;
 
         // 0. Safely apply pending preset transitions between frames on render core
         static int s_applied_left_preset = -1;
@@ -448,13 +567,18 @@ void DisplayManager::EyeRenderTask(void* arg) {
         static uint32_t move_duration_ms = 100;
         static uint32_t dwell_duration_ms = 1200;
 
+        if (behavior_state_changed) {
+            eye_in_motion = false;
+            dwell_duration_ms = 0;
+            move_start_time_ms = now_ms - 1;
+        }
+
         uint32_t dt = now_ms - move_start_time_ms;
 
         if (eye_in_motion) {
             if (dt >= move_duration_ms) {
                 eye_in_motion = false;
-                // Natural biological stop dwell duration: 400ms to 2800ms
-                dwell_duration_ms = 400 + (esp_random() % 2400);
+                dwell_duration_ms = RandRangeMs(behavior.dwell_min_ms, behavior.dwell_span_ms);
                 move_start_time_ms = now_ms;
                 current_gaze_x_ = eye_target_x;
                 current_gaze_y_ = eye_target_y;
@@ -467,35 +591,22 @@ void DisplayManager::EyeRenderTask(void* arg) {
             }
         } else {
             if (dt > dwell_duration_ms) {
-                // Bodmer style natural circular amplitude (+/-24px in X, +/-18px in Y)
+                // Conversation-aware Bodmer style gaze target. Each high-level state keeps its
+                // own fixation amplitude, dwell and saccade speed so the eyes feel attentive
+                // during speech instead of randomly wandering.
                 float nx = 0.0f, ny = 0.0f;
-                int attempts = 0;
-                do {
-                    nx = (float)((int)(esp_random() % 49) - 24); // -24 to +24
-                    ny = (float)((int)(esp_random() % 37) - 18); // -18 to +18
-                    attempts++;
-                } while (((nx * nx) / (24.0f * 24.0f) + (ny * ny) / (18.0f * 18.0f) > 1.0f) && attempts < 10);
-
-                if (state == EYE_STATE_LISTENING) {
-                    nx = 0.0f;
-                    ny = -4.0f; // Attentive direct gaze
-                    target_pupil_dilation_ = 36.0f;
-                } else if (state == EYE_STATE_THINKING) {
-                    nx = (esp_random() % 2 == 0) ? -16.0f : 16.0f;
-                    ny = -12.0f; // Introspective glance
-                    target_pupil_dilation_ = 28.0f;
-                } else if (state == EYE_STATE_SPEAKING) {
-                    target_pupil_dilation_ = 33.0f;
-                } else {
-                    target_pupil_dilation_ = 29.0f + (float)(esp_random() % 5);
+                PickConversationGaze(state, state_age_ms, behavior, audio_energy, nx, ny);
+                target_pupil_dilation_ = behavior.pupil_base;
+                if (state == EYE_STATE_IDLE) {
+                    target_pupil_dilation_ += RandUnit() * 4.0f;
                 }
 
                 eye_start_x = current_gaze_x_;
                 eye_start_y = current_gaze_y_;
                 eye_target_x = nx;
                 eye_target_y = ny;
-                // Ballistic saccade duration: 70ms to 150ms
-                move_duration_ms = 70 + (esp_random() % 80);
+                // Ballistic saccade duration remains fast, but varies by state.
+                move_duration_ms = RandRangeMs(behavior.move_min_ms, behavior.move_span_ms);
                 move_start_time_ms = now_ms;
                 eye_in_motion = true;
             }
@@ -504,15 +615,15 @@ void DisplayManager::EyeRenderTask(void* arg) {
         // 2. Micro-Saccadic Physiological Fixation Tremor (200ms rhythm)
         if (now_ms - last_tremor_time_ms >= 180 + (esp_random() % 120)) {
             last_tremor_time_ms = now_ms;
-            micro_tremor_x = ((float)(esp_random() % 100) / 100.0f - 0.5f) * 1.4f; // +/- 0.7px
-            micro_tremor_y = ((float)(esp_random() % 100) / 100.0f - 0.5f) * 1.0f; // +/- 0.5px
+            micro_tremor_x = RandSigned(behavior.tremor_x);
+            micro_tremor_y = RandSigned(behavior.tremor_y);
         }
 
         // Smooth Pupil Accommodation + Speech Energy Reactivity
-        float audio_pulse = audio_energy_.load(std::memory_order_relaxed) * 4.5f;
+        float audio_pulse = audio_energy * (speech_active ? 6.0f : 2.5f);
         current_pupil_dilation_ += (target_pupil_dilation_ - current_pupil_dilation_) * 0.12f;
         float effective_pupil = current_pupil_dilation_ + audio_pulse;
-        if (effective_pupil > 40.0f) effective_pupil = 40.0f;
+        if (effective_pupil > 42.0f) effective_pupil = 42.0f;
         if (effective_pupil < 20.0f) effective_pupil = 20.0f;
 
         // 3. Anatomical Eyelid Pitch Tracking & Blinking (Authentic Bodmer Uncanny Eyes)
@@ -531,6 +642,8 @@ void DisplayManager::EyeRenderTask(void* arg) {
             // Resting posture creates the almond ocular socket from Bodmer's uncanny eyes (Photo 1 Cat, Photo 2 Human)
             float target_u_thresh = 110.0f + (current_gaze_y_ * 2.2f);
             float target_l_thresh = 45.0f - (current_gaze_y_ * 0.8f);
+            target_u_thresh += behavior.upper_lid_bias;
+            target_l_thresh += behavior.lower_lid_bias;
 
             // Owl Amber uses wide nocturnal aperture matching Photo 3
             if (left_pid == EyeRenderer::PRESET_OWL || right_pid == EyeRenderer::PRESET_OWL) {
@@ -554,6 +667,13 @@ void DisplayManager::EyeRenderTask(void* arg) {
                 target_l_thresh = 20.0f;
             }
 
+            if (speech_active) {
+                // Tiny lid movement follows TTS energy so speech feels embodied without
+                // becoming a crude mouth substitute.
+                target_u_thresh += audio_energy * 4.0f;
+                target_l_thresh += audio_energy * 10.0f;
+            }
+
             // Clamp baseline thresholds to anatomically valid ranges
             if (target_u_thresh < 20.0f) target_u_thresh = 20.0f;
             if (target_u_thresh > 200.0f) target_u_thresh = 200.0f;
@@ -566,8 +686,8 @@ void DisplayManager::EyeRenderTask(void* arg) {
                     blink_in_progress_ = true;
                     blink_start_time_ms_ = now_ms;
                     last_blink_time_ms_ = now_ms;
-                    next_blink_interval_ms_ = 2400 + (esp_random() % 3200);
-                    pending_double_blink_ = ((esp_random() % 100) < 18);
+                    next_blink_interval_ms_ = RandRangeMs(behavior.blink_min_ms, behavior.blink_span_ms);
+                    pending_double_blink_ = ((esp_random() % 100) < behavior.double_blink_chance);
                 } else if (pending_double_blink_ && (now_ms - last_blink_time_ms_ >= 260)) {
                     blink_in_progress_ = true;
                     blink_start_time_ms_ = now_ms;
@@ -789,6 +909,18 @@ void DisplayManager::SetAudioEnergy(float energy, bool speech_active) {
 
 EyeAnimationState DisplayManager::MapStatusToState(const char* status) {
     if (!status) return EYE_STATE_IDLE;
+    if (std::strcmp(status, Lang::Strings::LISTENING) == 0) return EYE_STATE_LISTENING;
+    if (std::strcmp(status, Lang::Strings::SPEAKING) == 0) return EYE_STATE_SPEAKING;
+    if (std::strcmp(status, Lang::Strings::STANDBY) == 0) return EYE_STATE_IDLE;
+    if (std::strcmp(status, Lang::Strings::CONNECTING) == 0 ||
+        std::strcmp(status, Lang::Strings::REGISTERING_NETWORK) == 0 ||
+        std::strcmp(status, Lang::Strings::DETECTING_MODULE) == 0 ||
+        std::strcmp(status, Lang::Strings::LOADING_PROTOCOL) == 0 ||
+        std::strcmp(status, Lang::Strings::CHECKING_NEW_VERSION) == 0 ||
+        std::strcmp(status, Lang::Strings::PLEASE_WAIT) == 0) {
+        return EYE_STATE_THINKING;
+    }
+
     std::string s(status);
     if (s.find("Listen") != std::string::npos || s.find("listening") != std::string::npos) return EYE_STATE_LISTENING;
     if (s.find("Think") != std::string::npos || s.find("thinking") != std::string::npos ||
