@@ -420,15 +420,16 @@
         </div>
         <div class="presets-grid" id="presetsGrid">
           <div class="preset-pill active" data-preset="0">Human Blue</div>
-          <div class="preset-pill" data-preset="1">Cat Yellow</div>
-          <div class="preset-pill" data-preset="2">Dragon Fire</div>
-          <div class="preset-pill" data-preset="3">Cyborg Red</div>
-          <div class="preset-pill" data-preset="4">Doe Anime</div>
-          <div class="preset-pill" data-preset="5">Owl Amber</div>
-          <div class="preset-pill" data-preset="6">Goat Horizontal</div>
-          <div class="preset-pill" data-preset="7">Monster Nauga</div>
-          <div class="preset-pill" data-preset="8">Newt Orange</div>
-          <div class="preset-pill" data-preset="9">Dragon Full</div>
+          <div class="preset-pill" data-preset="1">Japanese</div>
+          <div class="preset-pill" data-preset="2">Cat Yellow</div>
+          <div class="preset-pill" data-preset="3">Dragon Fire</div>
+          <div class="preset-pill" data-preset="4">Cyborg Red</div>
+          <div class="preset-pill" data-preset="5">Doe Anime</div>
+          <div class="preset-pill" data-preset="6">Owl Amber</div>
+          <div class="preset-pill" data-preset="7">Goat Horizontal</div>
+          <div class="preset-pill" data-preset="8">Monster Nauga</div>
+          <div class="preset-pill" data-preset="9">Newt Orange</div>
+          <div class="preset-pill" data-preset="10">Dragon Full</div>
         </div>
       </div>
     </div>
@@ -466,6 +467,10 @@
           <div class="telemetry-label">Barge-In Mode</div>
           <div class="telemetry-value" style="color: var(--accent-purple);">AEC Echo Cancellation</div>
         </div>
+        <div class="telemetry-card">
+          <div class="telemetry-label">Boot Control</div>
+          <div class="telemetry-value" style="color: var(--accent-cyan);">HTTP :3233 + MCP user-only</div>
+        </div>
       </div>
 
       <div class="info-box">
@@ -474,6 +479,18 @@
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+        <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">Dual-Boot Slot Control</div>
+        <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">
+          The flashed firmware exposes a LAN boot-control endpoint on <code>http://BOARD_IP:3233</code>.
+          Slot switching refuses blank or invalid app partitions and requires explicit confirmation.
+        </p>
+        <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+          <button class="btn" id="btnBootStatus">Boot Status</button>
+          <button class="btn" id="btnBootSlot0">Switch to ota_0</button>
+          <button class="btn" id="btnBootSlot1">Switch to ota_1</button>
+        </div>
+        <pre id="bootStatusOutput" style="font-family: var(--font-mono); font-size: 0.75rem; line-height: 1.35; white-space: pre-wrap; max-height: 180px; overflow: auto; background: rgba(15,23,42,0.8); padding: 0.75rem; border-radius: 6px; border: 1px solid var(--border-subtle); color: var(--text-secondary);">Boot status not queried yet.</pre>
+
         <div style="font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);">One-Click Quick Restoration</div>
         <p style="font-size: 0.8rem; color: var(--text-muted); line-height: 1.4;">
           If an experimental build ever misbehaves, run the local one-click restore script to immediately return to the verified golden baseline:
@@ -494,6 +511,10 @@
     const statusText = document.getElementById('statusText');
     const dispSubnet = document.getElementById('dispSubnet');
     const btnConnect = document.getElementById('btnConnect');
+    const btnBootStatus = document.getElementById('btnBootStatus');
+    const btnBootSlot0 = document.getElementById('btnBootSlot0');
+    const btnBootSlot1 = document.getElementById('btnBootSlot1');
+    const bootStatusOutput = document.getElementById('bootStatusOutput');
 
     // Restore saved IP
     const savedIp = localStorage.getItem('xiaozhi_board_ip');
@@ -531,6 +552,55 @@
     boardIpInput.addEventListener('change', () => {
       dispSubnet.textContent = boardIpInput.value.trim();
     });
+
+    async function fetchBootControl(path) {
+      const ip = boardIpInput.value.trim();
+      if (!ip) throw new Error('Board IP is required');
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 4000);
+      try {
+        const res = await fetch(`http://${ip}:3233${path}`, { signal: controller.signal });
+        const text = await res.text();
+        let parsed;
+        try {
+          parsed = JSON.parse(text);
+        } catch {
+          parsed = { raw: text };
+        }
+        if (!res.ok) {
+          throw new Error(JSON.stringify(parsed, null, 2));
+        }
+        return parsed;
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
+
+    async function refreshBootStatus() {
+      bootStatusOutput.textContent = 'Querying boot status...';
+      try {
+        const status = await fetchBootControl('/boot/status');
+        bootStatusOutput.textContent = JSON.stringify(status, null, 2);
+      } catch (err) {
+        bootStatusOutput.textContent = `Boot status failed:\n${err.message}`;
+      }
+    }
+
+    async function switchBootSlot(slot) {
+      const confirmed = window.confirm(`Switch next boot to ota_${slot} and reboot the device?`);
+      if (!confirmed) return;
+      bootStatusOutput.textContent = `Requesting switch to ota_${slot}...`;
+      try {
+        const result = await fetchBootControl(`/boot/switch?slot=${slot}&confirm=SWITCH`);
+        bootStatusOutput.textContent = JSON.stringify(result, null, 2);
+      } catch (err) {
+        bootStatusOutput.textContent = `Boot switch refused/failed:\n${err.message}`;
+      }
+    }
+
+    btnBootStatus.addEventListener('click', refreshBootStatus);
+    btnBootSlot0.addEventListener('click', () => switchBootSlot(0));
+    btnBootSlot1.addEventListener('click', () => switchBootSlot(1));
 
     // -------------------------------------------------------------
     // Photorealistic Uncanny Eye Polar Ray-Tracing Simulator

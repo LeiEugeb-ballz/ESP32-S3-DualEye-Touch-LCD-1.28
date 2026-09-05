@@ -29,6 +29,7 @@
 #include "ota_server.h"
 #include "memory_manager.h"
 #include "bootstrap.h"
+#include "boot_control_server.h"
 #include "wifi_manager.h"
 #include "system_info.h"
 
@@ -448,9 +449,17 @@ public:
 
         // Run System Bootstrap & Awareness Initialization
         Bootstrap::Initialize();
+    }
 
-        // Start Direct TCP Push OTA Server on Port 3232
+    virtual void StartNetwork() override {
+        WifiBoard::StartNetwork();
+
+        // Start network-facing services only after the Wi-Fi stack has been
+        // initialized by WifiBoard::StartNetwork(). Starting socket servers in
+        // the board constructor can hit lwIP before tcpip_init has created its
+        // mailbox, which causes a boot-looping assertion on hardware.
         OtaPushServer::StartServer(3232);
+        BootControlServer::StartServer(3233);
     }
 
     virtual std::string GetBoardJson() override {
@@ -460,6 +469,7 @@ public:
         json += R"("eyes":{"active_preset":"japanese","presets_count":11,"renderer":"DMA Ping-Pong 50FPS"},)";
         json += R"("soul_and_memory":{"storage":"NVS Flash","notes_support":true,"soul_memory_support":true},)";
         json += R"("ota_server":{"status":"active","port":3232,"mode":"TCP Push OTA"},)";
+        json += R"("boot_control":{"status":"active","port":3233,"mode":"HTTP dual-slot status/switch"},)";
 
         if (!wifi.IsConfigMode()) {
             json += R"("ssid":")" + wifi.GetSsid() + R"(",)";
