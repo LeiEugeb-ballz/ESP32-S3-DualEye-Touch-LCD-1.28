@@ -131,7 +131,11 @@ private:
     EyeRenderer::UncannyEyeRenderer eye_renderer_;
 
     // Internal SRAM DMA ping-pong buffers
-    static constexpr int kChunkLines = 20;
+    // Keep each SPI frame slice large enough to avoid queue starvation while
+    // retaining a small internal DMA footprint. The panel IO is configured
+    // with a single in-flight transaction, so RenderEye advances slices only
+    // after the previous transfer has completed.
+    static constexpr int kChunkLines = 40;
     static constexpr size_t kChunkBytes = 240 * kChunkLines * sizeof(uint16_t);
     uint16_t* dma_buffer_[2] = {nullptr, nullptr};
     uint8_t current_dma_buf_ = 0;
