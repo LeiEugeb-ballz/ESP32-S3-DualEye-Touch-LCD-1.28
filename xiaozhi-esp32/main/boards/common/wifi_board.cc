@@ -23,8 +23,10 @@
 
 static const char *TAG = "WifiBoard";
 
-// Connection timeout in seconds (12s for responsive fallback to AP config mode when away from home)
-static constexpr int CONNECT_TIMEOUT_SEC = 12;
+// Connection timeout in seconds. The Wi-Fi station scans for saved networks and
+// connects to the strongest remembered SSID by RSSI. If no saved network can be
+// reached within this window, the board enters AP config mode.
+static constexpr int CONNECT_TIMEOUT_SEC = 60;
 
 WifiBoard::WifiBoard() {
     // Create connection timeout timer
@@ -88,20 +90,6 @@ void WifiBoard::StartNetwork() {
 
 void WifiBoard::TryWifiConnect() {
     auto& ssid_manager = SsidManager::GetInstance();
-
-    // Ensure default network is registered in remembered networks without clearing others
-    const auto& current_list = ssid_manager.GetSsidList();
-    bool default_present = false;
-    for (const auto& item : current_list) {
-        if (item.ssid == "Rondavel 2.4" || item.ssid == "Rondavl 2.4") {
-            default_present = true;
-            break;
-        }
-    }
-    if (!default_present) {
-        ESP_LOGI(TAG, "Adding default network credentials: Rondavel 2.4");
-        ssid_manager.AddSsid("Rondavel 2.4", "30806511");
-    }
 
     bool have_ssid = !ssid_manager.GetSsidList().empty();
 

@@ -223,69 +223,78 @@ void HandleSwitch(int client_sock, const std::string& request) {
 }
 
 void BootControlTask(void* arg) {
-    int server_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
-    if (server_sock < 0) {
-        ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-        s_server_task = nullptr;
-        vTaskDelete(nullptr);
-        return;
-    }
-
-    int opt = 1;
-    setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-
     struct sockaddr_in server_addr = {};
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     server_addr.sin_port = htons(s_listen_port);
 
-    if (bind(server_sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) != 0) {
-        ESP_LOGE(TAG, "Socket bind failed on port %d: errno %d", s_listen_port, errno);
-        close(server_sock);
-        s_server_task = nullptr;
-        vTaskDelete(nullptr);
-        return;
-    }
-
-    if (listen(server_sock, 3) != 0) {
-        ESP_LOGE(TAG, "Socket listen failed: errno %d", errno);
-        close(server_sock);
-        s_server_task = nullptr;
-        vTaskDelete(nullptr);
-        return;
-    }
-
-    ESP_LOGI(TAG, "Boot control HTTP server listening on port %d", s_listen_port);
+    // Match the OTA push server's conservative startup behavior. The board
+    // starts network services immediately after Wi-Fi initialization begins,
+    // but DHCP/link readiness can lag behind. Never exit permanently on the
+    // first socket failure; retry so the control plane appears once networking
+    // is actually usable.
+    vTaskDelay(pdMS_TO_TICKS(6000));
 
     while (true) {
-        struct sockaddr_in client_addr = {};
-        socklen_t client_addr_len = sizeof(client_addr);
-        int client_sock = accept(server_sock, (struct sockaddr*)&client_addr, &client_addr_len);
-        if (client_sock < 0) {
-            ESP_LOGE(TAG, "Unable to accept connection: errno %d", errno);
+        int server_sock = socket(AF_INET, SOCK_STREAM, IPPROTO_IP);
+        if (server_sock < 0) {
+            ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
+            vTaskDelay(pdMS_TO_TICKS(3000));
             continue;
         }
 
-        char rx_buf[512] = {};
-        int len = recv(client_sock, rx_buf, sizeof(rx_buf) - 1, 0);
-        if (len <= 0) {
+        int opt = 1;
+        setsockopt(server_sock, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+
+        if (bind(server_sock, (struct sockaddr*)&server_addr, sizeof(server_addr)) != 0) {
+            ESP_LOGE(TAG, "Socket bind failed on port %d: errno %d", s_listen_port, errno);
+            close(server_sock);
+            vTaskDelay(pdMS_TO_TICKS(3000));
+            continue;
+        }
+
+        if (listen(server_sock, 3) != 0) {
+            ESP_LOGE(TAG, "Socket listen failed: errno %d", errno);
+            close(server_sock);
+            vTaskDelay(pdMS_TO_TICKS(3000));
+            continue;
+        }
+
+        ESP_LOGI(TAG, "Boot control HTTP server listening on port %d", s_listen_port);
+
+        while (true) {
+            struct sockaddr_in client_addr = {};
+            socklen_t client_addr_len = sizeof(client_addr);
+            int client_sock = accept(server_sock, (struct sockaddr*)&client_addr, &client_addr_len);
+            if (client_sock < 0) {
+                ESP_LOGE(TAG, "Unable to accept connection: errno %d", errno);
+                break;
+            }
+
+            char rx_buf[512] = {};
+            int len = recv(client_sock, rx_buf, sizeof(rx_buf) - 1, 0);
+            if (len <= 0) {
+                close(client_sock);
+                continue;
+            }
+            rx_buf[len] = '\0';
+            std::string request(rx_buf);
+
+            if (request.rfind("OPTIONS ", 0) == 0) {
+                SendHttp(client_sock, "204 No Content", "text/plain", "");
+            } else if (request.rfind("GET /boot/switch?", 0) == 0) {
+                HandleSwitch(client_sock, request);
+            } else if (request.rfind("GET /boot/status", 0) == 0 || request.rfind("GET / ", 0) == 0) {
+                SendHttp(client_sock, "200 OK", "application/json", BuildStatusJson());
+            } else {
+                SendHttp(client_sock, "404 Not Found", "application/json", ErrorJson("unknown endpoint"));
+            }
+
             close(client_sock);
-            continue;
-        }
-        rx_buf[len] = '\0';
-        std::string request(rx_buf);
-
-        if (request.rfind("OPTIONS ", 0) == 0) {
-            SendHttp(client_sock, "204 No Content", "text/plain", "");
-        } else if (request.rfind("GET /boot/switch?", 0) == 0) {
-            HandleSwitch(client_sock, request);
-        } else if (request.rfind("GET /boot/status", 0) == 0 || request.rfind("GET / ", 0) == 0) {
-            SendHttp(client_sock, "200 OK", "application/json", BuildStatusJson());
-        } else {
-            SendHttp(client_sock, "404 Not Found", "application/json", ErrorJson("unknown endpoint"));
         }
 
-        close(client_sock);
+        close(server_sock);
+        vTaskDelay(pdMS_TO_TICKS(2000));
     }
 }
 
