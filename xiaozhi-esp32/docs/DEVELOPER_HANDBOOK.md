@@ -67,6 +67,12 @@ The runtime proof points after flashing are:
 * serial logs show the WakeNet/AFE pipeline loaded;
 * saying **"Hi ESP"** transitions the device into listening/responding.
 
+Memory stability note: if serial logs show `esp-aes: Failed to allocate memory`
+after WakeNet/AFE starts, keep the eye DMA slice size conservative. The current
+checkpoint uses one 20-scanline internal-DMA transfer buffer per display. That
+preserves the same eye geometry while reducing internal SRAM pressure for
+WakeNet, TLS, audio, and MQTT.
+
 ### Option 1: Wireless TCP Push OTA (Recommended)
 Flash updated firmware without physical cables over your local network:
 ```bash

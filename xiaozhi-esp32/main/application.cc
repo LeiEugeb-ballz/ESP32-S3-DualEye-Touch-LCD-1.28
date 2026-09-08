@@ -65,8 +65,9 @@ void Application::Initialize() {
     // Setup the display
     auto display = board.GetDisplay();
     display->SetupUI();
-    // Print board name/version info
-    display->SetChatMessage("system", SystemInfo::GetUserAgent().c_str());
+    // Keep the direct-eye display clean during boot. The user-agent string is
+    // still available in logs/status, but rendering it as a tiny bottom overlay
+    // looks like garbage on the round eyes and wastes startup draw work.
 
     // Setup the audio service
     auto codec = board.GetAudioCodec();

@@ -1098,23 +1098,23 @@ SpiLcdDisplayExtended::SpiLcdDisplayExtended(
         }
     }
 
-    // Allocate 2 ping-pong DMA chunk buffers in internal SRAM (zero wait-state L1)
-    dma_buffer_[0] = (uint16_t*)heap_caps_malloc(kChunkBytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
-    dma_buffer_[1] = (uint16_t*)heap_caps_malloc(kChunkBytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
+    // Allocate one DMA chunk buffer in internal SRAM (zero wait-state L1).
+    // Transfers are waited on before reuse, so a second ping-pong buffer is not required.
+    dma_buffer_ = (uint16_t*)heap_caps_malloc(kChunkBytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
 
-    if (!dma_buffer_[0] || !dma_buffer_[1]) {
-        ESP_LOGE(TAG, "CRITICAL: Failed to allocate %u bytes DMA chunk buffers in internal SRAM for %s eye!",
+    if (!dma_buffer_) {
+        ESP_LOGE(TAG, "CRITICAL: Failed to allocate %u bytes DMA chunk buffer in internal SRAM for %s eye!",
                  (unsigned)kChunkBytes, is_left_eye ? "Left" : "Right");
     } else {
-        ESP_LOGI(TAG, "Allocated 2x %u bytes DMA ping-pong buffers in internal SRAM for %s eye",
+        ESP_LOGI(TAG, "Allocated 1x %u bytes DMA chunk buffer in internal SRAM for %s eye",
                  (unsigned)kChunkBytes, is_left_eye ? "Left" : "Right");
     }
 
     // Direct hardware screen clear (Black 0x0000)
-    if (dma_buffer_[0]) {
-        memset(dma_buffer_[0], 0, kChunkBytes);
+    if (dma_buffer_) {
+        memset(dma_buffer_, 0, kChunkBytes);
         for (int y = 0; y < height_; y += kChunkLines) {
-            esp_err_t err = esp_lcd_panel_draw_bitmap(panel_, 0, y, width_, y + kChunkLines, dma_buffer_[0]);
+            esp_err_t err = esp_lcd_panel_draw_bitmap(panel_, 0, y, width_, y + kChunkLines, dma_buffer_);
             if (err != ESP_OK) {
                 ESP_LOGE(TAG, "%s eye initial clear failed at y=%d: %s (%d)",
                          is_left_eye ? "Left" : "Right",
@@ -1139,13 +1139,9 @@ SpiLcdDisplayExtended::SpiLcdDisplayExtended(
 }
 
 SpiLcdDisplayExtended::~SpiLcdDisplayExtended() {
-    if (dma_buffer_[0]) {
-        heap_caps_free(dma_buffer_[0]);
-        dma_buffer_[0] = nullptr;
-    }
-    if (dma_buffer_[1]) {
-        heap_caps_free(dma_buffer_[1]);
-        dma_buffer_[1] = nullptr;
+    if (dma_buffer_) {
+        heap_caps_free(dma_buffer_);
+        dma_buffer_ = nullptr;
     }
     if (color_done_sem_) {
         vSemaphoreDelete(color_done_sem_);
@@ -1179,15 +1175,15 @@ bool SpiLcdDisplayExtended::WaitForColorTransfer(int y) {
 }
 
 void SpiLcdDisplayExtended::FillColor(uint16_t rgb565_color) {
-    if (!panel_ || !dma_buffer_[0]) return;
+    if (!panel_ || !dma_buffer_) return;
 
     const uint16_t color = DmaRgb565(rgb565_color);
     for (int i = 0; i < 240 * kChunkLines; i++) {
-        dma_buffer_[0][i] = color;
+        dma_buffer_[i] = color;
     }
 
     for (int y = 0; y < 240; y += kChunkLines) {
-        esp_err_t err = esp_lcd_panel_draw_bitmap(panel_, 0, y, 240, y + kChunkLines, dma_buffer_[0]);
+        esp_err_t err = esp_lcd_panel_draw_bitmap(panel_, 0, y, 240, y + kChunkLines, dma_buffer_);
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "%s eye LCD fill failed at y=%d: %s (%d)",
                      is_left_eye_ ? "Left" : "Right",
@@ -1221,7 +1217,7 @@ void SpiLcdDisplayExtended::SetupUI() {
 }
 
 void SpiLcdDisplayExtended::RenderEye(const EyeRenderer::RenderParams& params) {
-    if (!panel_ || !dma_buffer_[0] || !dma_buffer_[1]) return;
+    if (!panel_ || !dma_buffer_) return;
 
     static uint32_t s_left_draw_errors = 0;
     static uint32_t s_right_draw_errors = 0;
@@ -1229,7 +1225,7 @@ void SpiLcdDisplayExtended::RenderEye(const EyeRenderer::RenderParams& params) {
 
     // Stream fixed-height chunks directly into SPI DMA.
     for (int y = 0; y < 240; y += kChunkLines) {
-        uint16_t* active_buf = dma_buffer_[current_dma_buf_];
+        uint16_t* active_buf = dma_buffer_;
         eye_renderer_.RenderChunk(active_buf, y, kChunkLines, params, is_left_eye_);
         DrawChatOverlay(active_buf, y);
         esp_err_t err = esp_lcd_panel_draw_bitmap(panel_, 0, y, 240, y + kChunkLines, active_buf);
@@ -1246,6 +1242,5 @@ void SpiLcdDisplayExtended::RenderEye(const EyeRenderer::RenderParams& params) {
         } else {
             WaitForColorTransfer(y);
         }
-        current_dma_buf_ = !current_dma_buf_;
     }
 }
