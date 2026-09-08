@@ -7,6 +7,7 @@
 #include <esp_lcd_panel_ops.h>
 #include <esp_lcd_touch.h>
 #include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include <freertos/task.h>
 #include <vector>
 #include <string>
@@ -139,6 +140,12 @@ private:
     static constexpr size_t kChunkBytes = 240 * kChunkLines * sizeof(uint16_t);
     uint16_t* dma_buffer_[2] = {nullptr, nullptr};
     uint8_t current_dma_buf_ = 0;
+    SemaphoreHandle_t color_done_sem_ = nullptr;
+
+    static bool OnColorTransferDone(esp_lcd_panel_io_handle_t panel_io,
+                                    esp_lcd_panel_io_event_data_t* edata,
+                                    void* user_ctx);
+    bool WaitForColorTransfer(int y);
 
 public:
     SpiLcdDisplayExtended(esp_lcd_panel_io_handle_t panel_io,
@@ -160,6 +167,7 @@ public:
 
     // High-performance slice-by-slice DMA render pass
     void RenderEye(const EyeRenderer::RenderParams& params);
+    void FillColor(uint16_t rgb565_color);
 
     bool IsLeftEye() const { return is_left_eye_; }
     esp_lcd_panel_handle_t GetPanel() const { return panel_; }

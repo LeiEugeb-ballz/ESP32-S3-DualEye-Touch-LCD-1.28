@@ -5,6 +5,7 @@
 #include "eye_presets.h"
 #include "config.h"
 #include "assets/lang_config.h"
+#include <esp_err.h>
 #include <esp_log.h>
 #include <esp_heap_caps.h>
 #include <esp_random.h>
@@ -206,7 +207,7 @@ static const uint8_t* Glyph3x5(char ch) {
         case '/': { static const uint8_t g[5] = {1, 1, 2, 4, 4}; return g; }
         case '_': { static const uint8_t g[5] = {0, 0, 0, 0, 7}; return g; }
         case ' ': return blank;
-        default: return qmark;
+        default: return blank;
     }
 }
 
@@ -229,6 +230,33 @@ static void DrawGlyph3x5(uint16_t* buf, int chunk_y, int x, int y, char ch, uint
     }
 }
 
+static std::string SanitizeOverlayText(const std::string& input) {
+    std::string output;
+    output.reserve(input.size());
+    bool last_was_space = false;
+
+    for (unsigned char ch : input) {
+        bool supported = (ch >= '0' && ch <= '9') ||
+                         (ch >= 'A' && ch <= 'Z') ||
+                         (ch >= 'a' && ch <= 'z') ||
+                         ch == ':' || ch == '.' || ch == ',' || ch == '!' ||
+                         ch == '?' || ch == '-' || ch == '/' || ch == '_' ||
+                         ch == ' ';
+        if (!supported) {
+            if (!last_was_space) {
+                output.push_back(' ');
+                last_was_space = true;
+            }
+            continue;
+        }
+
+        output.push_back((char)ch);
+        last_was_space = (ch == ' ');
+    }
+
+    return output;
+}
+
 static void DrawChatOverlay(uint16_t* buf, int chunk_y) {
     if (chunk_y + 20 <= 204) return;
 
@@ -248,7 +276,7 @@ static void DrawChatOverlay(uint16_t* buf, int chunk_y) {
     } else if (role.find("assistant") != std::string::npos) {
         line = "A: ";
     }
-    line += text;
+    line += SanitizeOverlayText(text);
     if (line.size() > 28) {
         line.resize(27);
         line += ".";
@@ -500,6 +528,9 @@ const std::vector<SpiLcdDisplayExtended*>& DisplayManager::GetAllDisplays() {
 
 void DisplayManager::EyeRenderTask(void* arg) {
     ESP_LOGI(TAG, "EyeRenderTask entry - starting high-performance DMA rendering loop with Step 2 Lifelike Dynamics");
+
+    uint32_t render_started_ms = (uint32_t)(esp_timer_get_time() / 1000);
+    int last_startup_sweep_phase = -1;
 
     // Micro-saccadic tremor state
     float micro_tremor_x = 0.0f;
@@ -788,6 +819,53 @@ void DisplayManager::EyeRenderTask(void* arg) {
         params_right.upper_eyelid_threshold = right_has_eyelids ? (uint8_t)std::clamp((int)roundf(current_u_thresh), 0, 255) : 0;
         params_right.lower_eyelid_threshold = right_has_eyelids ? (uint8_t)std::clamp((int)roundf(current_l_thresh), 0, 255) : 0;
 
+        uint32_t startup_age_ms = now_ms - render_started_ms;
+        if (startup_age_ms < 5200) {
+            struct SweepPoint {
+                int16_t x;
+                int16_t y;
+                uint8_t pupil;
+            };
+            static constexpr uint16_t kColorWash[] = {
+                0xF800, // red
+                0x07E0, // green
+                0x001F, // blue
+                0xFFFF, // white
+                0x0000, // black
+            };
+            static constexpr SweepPoint kStartupSweep[] = {
+                {-30, 0, 26},
+                {30, 0, 38},
+                {0, -22, 28},
+                {0, 22, 40},
+                {0, 0, 32},
+            };
+            int phase = (int)(startup_age_ms / 1000);
+            if (phase < 0) phase = 0;
+            if (phase > 4) phase = 4;
+            const SweepPoint& sweep = kStartupSweep[phase];
+
+            params_left.gaze_x = sweep.x + 2;
+            params_right.gaze_x = sweep.x - 2;
+            params_left.gaze_y = sweep.y;
+            params_right.gaze_y = sweep.y;
+            params_left.pupil_dilation = sweep.pupil;
+            params_right.pupil_dilation = sweep.pupil;
+            params_left.upper_eyelid_threshold = 0;
+            params_left.lower_eyelid_threshold = 0;
+            params_right.upper_eyelid_threshold = 0;
+            params_right.lower_eyelid_threshold = 0;
+
+            if (phase != last_startup_sweep_phase) {
+                last_startup_sweep_phase = phase;
+                displays_[0]->FillColor(kColorWash[phase]);
+                displays_[1]->FillColor(kColorWash[phase]);
+                ESP_LOGI(TAG, "Startup LCD color+motion sweep phase %d: color=0x%04x gaze=(%d,%d) pupil=%u",
+                         phase, kColorWash[phase], sweep.x, sweep.y, sweep.pupil);
+                vTaskDelay(pdMS_TO_TICKS(180));
+            }
+        }
+
         // 6. Direct Hardware DMA Render Passes
         int64_t t0 = esp_timer_get_time();
         displays_[0]->RenderEye(params_left);
@@ -1004,6 +1082,21 @@ SpiLcdDisplayExtended::SpiLcdDisplayExtended(
 
     width_ = width;
     height_ = height;
+    color_done_sem_ = xSemaphoreCreateBinary();
+    if (!color_done_sem_) {
+        ESP_LOGE(TAG, "CRITICAL: Failed to create LCD transfer semaphore for %s eye",
+                 is_left_eye ? "Left" : "Right");
+    } else if (panel_io_) {
+        esp_lcd_panel_io_callbacks_t callbacks = {};
+        callbacks.on_color_trans_done = OnColorTransferDone;
+        esp_err_t callback_err = esp_lcd_panel_io_register_event_callbacks(panel_io_, &callbacks, this);
+        if (callback_err != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to register LCD transfer callback for %s eye: %s (%d)",
+                     is_left_eye ? "Left" : "Right",
+                     esp_err_to_name(callback_err),
+                     (int)callback_err);
+        }
+    }
 
     // Allocate 2 ping-pong DMA chunk buffers in internal SRAM (zero wait-state L1)
     dma_buffer_[0] = (uint16_t*)heap_caps_malloc(kChunkBytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
@@ -1021,7 +1114,16 @@ SpiLcdDisplayExtended::SpiLcdDisplayExtended(
     if (dma_buffer_[0]) {
         memset(dma_buffer_[0], 0, kChunkBytes);
         for (int y = 0; y < height_; y += kChunkLines) {
-            esp_lcd_panel_draw_bitmap(panel_, 0, y, width_, y + kChunkLines, dma_buffer_[0]);
+            esp_err_t err = esp_lcd_panel_draw_bitmap(panel_, 0, y, width_, y + kChunkLines, dma_buffer_[0]);
+            if (err != ESP_OK) {
+                ESP_LOGE(TAG, "%s eye initial clear failed at y=%d: %s (%d)",
+                         is_left_eye ? "Left" : "Right",
+                         y,
+                         esp_err_to_name(err),
+                         (int)err);
+            } else {
+                WaitForColorTransfer(y);
+            }
         }
     }
 
@@ -1044,6 +1146,57 @@ SpiLcdDisplayExtended::~SpiLcdDisplayExtended() {
     if (dma_buffer_[1]) {
         heap_caps_free(dma_buffer_[1]);
         dma_buffer_[1] = nullptr;
+    }
+    if (color_done_sem_) {
+        vSemaphoreDelete(color_done_sem_);
+        color_done_sem_ = nullptr;
+    }
+}
+
+bool SpiLcdDisplayExtended::OnColorTransferDone(esp_lcd_panel_io_handle_t panel_io,
+                                                esp_lcd_panel_io_event_data_t* edata,
+                                                void* user_ctx) {
+    auto* self = static_cast<SpiLcdDisplayExtended*>(user_ctx);
+    if (!self || !self->color_done_sem_) {
+        return false;
+    }
+    BaseType_t high_task_woken = pdFALSE;
+    xSemaphoreGiveFromISR(self->color_done_sem_, &high_task_woken);
+    return high_task_woken == pdTRUE;
+}
+
+bool SpiLcdDisplayExtended::WaitForColorTransfer(int y) {
+    if (!color_done_sem_) {
+        return true;
+    }
+    if (xSemaphoreTake(color_done_sem_, pdMS_TO_TICKS(250)) != pdTRUE) {
+        ESP_LOGE(TAG, "%s eye LCD transfer timeout at y=%d",
+                 is_left_eye_ ? "Left" : "Right",
+                 y);
+        return false;
+    }
+    return true;
+}
+
+void SpiLcdDisplayExtended::FillColor(uint16_t rgb565_color) {
+    if (!panel_ || !dma_buffer_[0]) return;
+
+    const uint16_t color = DmaRgb565(rgb565_color);
+    for (int i = 0; i < 240 * kChunkLines; i++) {
+        dma_buffer_[0][i] = color;
+    }
+
+    for (int y = 0; y < 240; y += kChunkLines) {
+        esp_err_t err = esp_lcd_panel_draw_bitmap(panel_, 0, y, 240, y + kChunkLines, dma_buffer_[0]);
+        if (err != ESP_OK) {
+            ESP_LOGE(TAG, "%s eye LCD fill failed at y=%d: %s (%d)",
+                     is_left_eye_ ? "Left" : "Right",
+                     y,
+                     esp_err_to_name(err),
+                     (int)err);
+        } else {
+            WaitForColorTransfer(y);
+        }
     }
 }
 
@@ -1070,12 +1223,29 @@ void SpiLcdDisplayExtended::SetupUI() {
 void SpiLcdDisplayExtended::RenderEye(const EyeRenderer::RenderParams& params) {
     if (!panel_ || !dma_buffer_[0] || !dma_buffer_[1]) return;
 
-    // Stream 12 chunks (20 lines each) directly into SPI DMA
+    static uint32_t s_left_draw_errors = 0;
+    static uint32_t s_right_draw_errors = 0;
+    uint32_t& draw_errors = is_left_eye_ ? s_left_draw_errors : s_right_draw_errors;
+
+    // Stream fixed-height chunks directly into SPI DMA.
     for (int y = 0; y < 240; y += kChunkLines) {
         uint16_t* active_buf = dma_buffer_[current_dma_buf_];
         eye_renderer_.RenderChunk(active_buf, y, kChunkLines, params, is_left_eye_);
         DrawChatOverlay(active_buf, y);
-        esp_lcd_panel_draw_bitmap(panel_, 0, y, 240, y + kChunkLines, active_buf);
+        esp_err_t err = esp_lcd_panel_draw_bitmap(panel_, 0, y, 240, y + kChunkLines, active_buf);
+        if (err != ESP_OK) {
+            draw_errors++;
+            if (draw_errors <= 8 || (draw_errors % 120) == 0) {
+                ESP_LOGE(TAG, "%s eye LCD draw failed at y=%d: %s (%d), total=%lu",
+                         is_left_eye_ ? "Left" : "Right",
+                         y,
+                         esp_err_to_name(err),
+                         (int)err,
+                         (unsigned long)draw_errors);
+            }
+        } else {
+            WaitForColorTransfer(y);
+        }
         current_dma_buf_ = !current_dma_buf_;
     }
 }

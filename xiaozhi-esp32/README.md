@@ -35,7 +35,7 @@ An embodied, conscious AI companion platform featuring **Dual 1.28-inch Round IP
   ```
 
 ### 🌐 Web Companion Avatar & Control Portal
-* Interactive desktop Web UI located in [`web_companion/index.html`](web_companion/index.html).
+* Interactive desktop Web UI located in [`web_companion/index.html`](web_companion/index.html). This is a local desktop companion page, not an ESP32-hosted captive portal.
 * Real-time canvas simulation of uncanny eye math, interactive mouse gaze tracking, soul memory explorer, flash notes workspace, and OTA bridge.
 
 ---
@@ -51,6 +51,23 @@ An embodied, conscious AI companion platform featuring **Dual 1.28-inch Round IP
 ---
 
 ## 🚀 Quick Start Guide
+
+## Current Hardware Checkpoint — 2026-09-06
+
+User checkpoint note dated 2026-09-06: **"BEST AND FURTHERIST ON PROJECT"**.
+
+Current preserved baseline:
+* The idle Uncanny Eyes renderer is the known-good visual state. Do not alter eye geometry, display pin mappings, SPI panel setup, or touch mappings without measured evidence.
+* Startup LCD self-test intentionally flashes color phases before normal eye motion. This proves both displays receive live DMA frames.
+* Voice wake baseline is English `Hi ESP` using the `wn9_hiesp` WakeNet model. The app binary and `generated_assets.bin` must be built/flashed together.
+* A bottom text strip during boot is expected only for valid short ASCII status/chat text. UTF-8 or unsupported characters are sanitized to avoid garbage glyphs.
+* Requested visual refinement not yet applied: scale the eye/corner geometry down so the inner caruncle/tear-duct corner sits closer to the nose-side corner while preserving the current successful eye ratio.
+
+Web/config reality:
+* If the Xiaozhi console shows the device online, the board has joined Wi-Fi and the fallback AP is not expected to broadcast.
+* The ESP32 config AP appears only when Wi-Fi provisioning/known-network connection fails or config mode is deliberately triggered.
+* The local visual/test page is `web_companion/index.html`.
+* The board boot/status endpoint is `http://<device-ip>:3233/boot/status` when the board is connected to Wi-Fi.
 
 ### 1. Environment Setup
 Activate the ESP-IDF toolchain for your platform:
@@ -70,7 +87,7 @@ On Windows, use the checked-in build wrapper. It creates a temporary short drive
 pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\build_firmware.ps1
 ```
 
-The default output directory is `build_safe/`. This is a build-only command; it does not flash hardware.
+The default output directory is `build_safe/`. This is a build-only command; it does not flash hardware. After changing wake-word or language config, verify the build log says `wakenet models: wn9_hiesp (will be packaged)`.
 
 If your ESP-IDF install is not in `C:\Espressif\frameworks\esp-idf`, set `IDF_PATH` first.
 
@@ -96,6 +113,12 @@ Only run this when you intentionally want to write firmware over USB.
 
 ```powershell
 idf.py -p COM13 flash monitor
+```
+
+Or use the project-local safe flasher, which waits for the board and flashes the matching app plus speech assets from `build_safe/`:
+
+```powershell
+python .\tools\flash_current_build.py --port COM13 --wait 180 --monitor 30
 ```
 
 ---

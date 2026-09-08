@@ -7,6 +7,35 @@ Any future agent or developer must consult this document before flashing or roll
 
 ## 1. Active Baseline Checkpoint (The Golden Build)
 
+### 2026-09-06 Active Development Checkpoint
+
+User checkpoint note dated 2026-09-06: **"BEST AND FURTHERIST ON PROJECT"**.
+
+Purpose:
+* preserve the visually confirmed good idle Uncanny Eyes behavior;
+* restore the intended English `Hi ESP` wake-word baseline;
+* keep app binary and speech assets aligned on `wn9_hiesp`;
+* document that the local `web_companion/index.html` is not an ESP32-hosted AP/web UI;
+* defer the requested smaller nose-side caruncle/tear-duct geometry until after voice bootstrap is verified.
+
+Required build proof:
+
+```text
+wakenet models: wn9_hiesp (will be packaged)
+```
+
+Required flash set when changing wake word:
+
+```text
+0x0      build_safe/bootloader/bootloader.bin
+0x8000   build_safe/partition_table/partition-table.bin
+0xd000   build_safe/ota_data_initial.bin
+0x20000  build_safe/xiaozhi.bin
+0x800000 build_safe/generated_assets.bin
+```
+
+Do not rely on an app-only flash for wake-word changes. The assets partition is where the speech model bundle is stored.
+
 * **Filename**: `checkpoints/step2_10_with_wifi.bin`
 * **Flash Offset**: `0x00000000` (Full 16MB SPI Flash layout, 8,711,256 bytes)
 * **Flash Command**:

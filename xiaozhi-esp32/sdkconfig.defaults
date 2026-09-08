@@ -34,6 +34,14 @@ CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT=n
 
 CONFIG_CODEC_I2C_BACKWARD_COMPATIBLE=n
 
+# Voice baseline for this board checkpoint.
+# The user-facing wake phrase is "Hi ESP"; keep app language and speech assets aligned.
+CONFIG_LANGUAGE_EN_US=y
+CONFIG_USE_AFE_WAKE_WORD=y
+CONFIG_SEND_WAKE_WORD_DATA=y
+CONFIG_SR_WN_WN9_HIESP=y
+CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS=n
+
 # Fix ML307 FIFO Overflow
 CONFIG_UART_ISR_IN_IRAM=y
 
