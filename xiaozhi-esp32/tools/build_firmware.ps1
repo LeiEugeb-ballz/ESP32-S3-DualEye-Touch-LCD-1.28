@@ -162,9 +162,31 @@ if (-not $env:IDF_PYTHON_ENV_PATH) {
     $env:IDF_PYTHON_ENV_PATH = $pythonEnv.FullName
 }
 
-$Python = Join-Path $env:IDF_PYTHON_ENV_PATH 'Scripts\python.exe'
+$Python = if ($env:ESP_PYTHON) {
+    $env:ESP_PYTHON
+} else {
+    Join-Path $env:IDF_PYTHON_ENV_PATH 'Scripts\python.exe'
+}
 if (-not (Test-Path -LiteralPath $Python)) {
     throw "ESP-IDF Python was not found at '$Python'."
+}
+
+if (-not $env:PROCESSOR_ARCHITECTURE) {
+    $env:PROCESSOR_ARCHITECTURE = if ([Environment]::Is64BitOperatingSystem) { 'AMD64' } else { 'x86' }
+}
+
+if ($env:ESP_PYTHON) {
+    $idfSitePackages = Join-Path $env:IDF_PYTHON_ENV_PATH 'Lib\site-packages'
+    if (Test-Path -LiteralPath $idfSitePackages) {
+        $pathSeparator = [IO.Path]::PathSeparator
+        $pythonPaths = @()
+        if ($env:PYTHONPATH) {
+            $pythonPaths = $env:PYTHONPATH -split [regex]::Escape($pathSeparator)
+        }
+        if ($pythonPaths -notcontains $idfSitePackages) {
+            $env:PYTHONPATH = if ($env:PYTHONPATH) { "$idfSitePackages$pathSeparator$env:PYTHONPATH" } else { $idfSitePackages }
+        }
+    }
 }
 
 $env:IDF_PATH = $IdfPath
@@ -229,7 +251,7 @@ try {
     if (-not (Test-Path -LiteralPath (Join-Path $ProjectRoot 'managed_components'))) {
         Write-Host 'Resolving ESP-IDF managed components before applying local linker repair...'
         Set-Location -LiteralPath $buildRoot
-        & $Python $IdfPy -B $BuildDir reconfigure
+        & $Python $IdfPy -B $BuildDir "-DPYTHON=$Python" "-DPython3_EXECUTABLE=$Python" reconfigure
         if ($LASTEXITCODE -ne 0) {
             throw "ESP-IDF dependency/configure step failed with exit code $LASTEXITCODE."
         }
@@ -238,7 +260,13 @@ try {
     Repair-ManagedComponentLinkers $ProjectRoot
 
     Set-Location -LiteralPath $buildRoot
-    & $Python $IdfPy -B $BuildDir build
+    if ($env:ESP_PYTHON) {
+        & $Python $IdfPy -B $BuildDir "-DPYTHON=$Python" "-DPython3_EXECUTABLE=$Python" reconfigure
+        if ($LASTEXITCODE -ne 0) {
+            throw "ESP-IDF reconfigure failed with exit code $LASTEXITCODE."
+        }
+    }
+    & $Python $IdfPy -B $BuildDir "-DPYTHON=$Python" "-DPython3_EXECUTABLE=$Python" build
     if ($LASTEXITCODE -ne 0) {
         throw "ESP-IDF build failed with exit code $LASTEXITCODE."
     }

@@ -63,6 +63,13 @@ Current preserved baseline:
 * A bottom text strip during boot is expected only for valid short ASCII status/chat text. UTF-8 or unsupported characters are sanitized to avoid garbage glyphs.
 * Requested visual refinement not yet applied: scale the eye/corner geometry down so the inner caruncle/tear-duct corner sits closer to the nose-side corner while preserving the current successful eye ratio.
 
+Memory-pressure checkpoint dated 2026-09-08:
+* Conversation audio queue depth is intentionally capped at about 1.08 seconds instead of 2.4 seconds to avoid storing unnecessary Opus backlog in SRAM.
+* The Opus encoder and MQTT encrypted-audio send path reuse buffers instead of allocating new buffers for every audio packet.
+* Optional custom JSON message handling frees printed cJSON strings immediately after use.
+* Build and USB flash to COM13 succeeded with `build_safe/xiaozhi.bin` size `0x3b8b10`; app partition free space was `0x374f0`.
+* A 180-second post-flash serial monitor showed stable boot, Wi-Fi, MQTT, WakeNet/AFE load, and moving idle eyes with minimum SRAM `13240`. A second idle-only monitor pass stayed stable with minimum SRAM `17352` and free SRAM around `28167-28683`. A wake-word conversation pass should still be monitored after this checkpoint to confirm the new conversation-time low-water mark.
+
 Web/config reality:
 * If the Xiaozhi console shows the device online, the board has joined Wi-Fi and the fallback AP is not expected to broadcast.
 * The ESP32 config AP appears only when Wi-Fi provisioning/known-network connection fails or config mode is deliberately triggered.
@@ -90,6 +97,8 @@ pwsh -NoProfile -ExecutionPolicy Bypass -File .\tools\build_firmware.ps1
 The default output directory is `build_safe/`. This is a build-only command; it does not flash hardware. After changing wake-word or language config, verify the build log says `wakenet models: wn9_hiesp (will be packaged)`.
 
 If your ESP-IDF install is not in `C:\Espressif\frameworks\esp-idf`, set `IDF_PATH` first.
+
+If the ESP-IDF Python launcher is broken on Windows, set `ESP_PYTHON` to a working Python executable before running the wrapper. The wrapper also normalizes `PROCESSOR_ARCHITECTURE` and adds the ESP-IDF venv site-packages path when `ESP_PYTHON` is used.
 
 ### 3. Direct ESP-IDF compilation
 

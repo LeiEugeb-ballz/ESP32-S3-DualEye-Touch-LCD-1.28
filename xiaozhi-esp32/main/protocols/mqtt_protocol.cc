@@ -169,30 +169,33 @@ bool MqttProtocol::SendAudio(std::unique_ptr<AudioStreamPacket> packet) {
         return false;
     }
 
-    std::string nonce(aes_nonce_);
-    *(uint16_t*)&nonce[2] = htons(packet->payload.size());
-    *(uint32_t*)&nonce[8] = htonl(packet->timestamp);
-    *(uint32_t*)&nonce[12] = htonl(++local_sequence_);
+    audio_nonce_buffer_ = aes_nonce_;
+    *(uint16_t*)&audio_nonce_buffer_[2] = htons(packet->payload.size());
+    *(uint32_t*)&audio_nonce_buffer_[8] = htonl(packet->timestamp);
+    *(uint32_t*)&audio_nonce_buffer_[12] = htonl(++local_sequence_);
 
-    std::string encrypted;
-    encrypted.resize(aes_nonce_.size() + packet->payload.size());
-    memcpy(encrypted.data(), nonce.data(), nonce.size());
+    encrypted_audio_buffer_.resize(aes_nonce_.size() + packet->payload.size());
+    memcpy(encrypted_audio_buffer_.data(), audio_nonce_buffer_.data(), audio_nonce_buffer_.size());
 
     size_t nc_off = 0;
     uint8_t stream_block[16] = {0};
-    if (mbedtls_aes_crypt_ctr(&aes_ctx_, packet->payload.size(), &nc_off, (uint8_t*)nonce.c_str(), stream_block,
-        (uint8_t*)packet->payload.data(), (uint8_t*)&encrypted[nonce.size()]) != 0) {
+    if (mbedtls_aes_crypt_ctr(&aes_ctx_, packet->payload.size(), &nc_off, (uint8_t*)audio_nonce_buffer_.data(), stream_block,
+        (uint8_t*)packet->payload.data(), (uint8_t*)&encrypted_audio_buffer_[audio_nonce_buffer_.size()]) != 0) {
         ESP_LOGE(TAG, "Failed to encrypt audio data");
         return false;
     }
 
-    return udp_->Send(encrypted) > 0;
+    return udp_->Send(encrypted_audio_buffer_) > 0;
 }
 
 void MqttProtocol::CloseAudioChannel(bool send_goodbye) {
     {
         std::lock_guard<std::mutex> lock(channel_mutex_);
         udp_.reset();
+        audio_nonce_buffer_.clear();
+        encrypted_audio_buffer_.clear();
+        audio_nonce_buffer_.shrink_to_fit();
+        encrypted_audio_buffer_.shrink_to_fit();
     }
 
     ESP_LOGI(TAG, "Closing audio channel, send_goodbye: %d", send_goodbye);

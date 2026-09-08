@@ -47,6 +47,8 @@ private:
     std::unique_ptr<Udp> udp_;
     mbedtls_aes_context aes_ctx_;
     std::string aes_nonce_;
+    std::string audio_nonce_buffer_;
+    std::string encrypted_audio_buffer_;
     std::string udp_server_;
     int udp_port_;
     uint32_t local_sequence_;

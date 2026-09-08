@@ -39,8 +39,13 @@
 #define OPUS_FRAME_DURATION_MS 60
 #define MAX_ENCODE_TASKS_IN_QUEUE 2
 #define MAX_PLAYBACK_TASKS_IN_QUEUE 2
-#define MAX_DECODE_PACKETS_IN_QUEUE (2400 / OPUS_FRAME_DURATION_MS)
-#define MAX_SEND_PACKETS_IN_QUEUE (2400 / OPUS_FRAME_DURATION_MS)
+// Keep Opus packet queues bounded to about 1 second of audio.  The previous
+// 2.4 second backlog could transiently consume nearly all free internal SRAM
+// during a conversation while the display, Wi-Fi, AFE, MQTT and codec tasks
+// were all active.
+#define MAX_AUDIO_PACKET_QUEUE_MS 1080
+#define MAX_DECODE_PACKETS_IN_QUEUE (MAX_AUDIO_PACKET_QUEUE_MS / OPUS_FRAME_DURATION_MS)
+#define MAX_SEND_PACKETS_IN_QUEUE (MAX_AUDIO_PACKET_QUEUE_MS / OPUS_FRAME_DURATION_MS)
 #define AUDIO_TESTING_MAX_DURATION_MS 10000
 #define MAX_TIMESTAMPS_IN_QUEUE 3
 
@@ -152,6 +157,7 @@ private:
     int encoder_duration_ms_ = OPUS_FRAME_DURATION_MS;
     int encoder_frame_size_ = 0;
     int encoder_outbuf_size_ = 0;
+    std::vector<uint8_t> encoder_scratch_;
     int decoder_sample_rate_ = 0;
     int decoder_duration_ms_ = OPUS_FRAME_DURATION_MS;
     int decoder_frame_size_ = 0;

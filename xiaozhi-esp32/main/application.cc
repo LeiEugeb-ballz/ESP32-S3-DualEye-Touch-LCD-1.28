@@ -593,11 +593,19 @@ void Application::InitializeProtocol() {
 #if CONFIG_RECEIVE_CUSTOM_MESSAGE
         } else if (strcmp(type->valuestring, "custom") == 0) {
             auto payload = cJSON_GetObjectItem(root, "payload");
-            ESP_LOGI(TAG, "Received custom message: %s", cJSON_PrintUnformatted(root));
+            char* root_json = cJSON_PrintUnformatted(root);
+            ESP_LOGI(TAG, "Received custom message: %s", root_json != nullptr ? root_json : "(null)");
+            if (root_json != nullptr) {
+                cJSON_free(root_json);
+            }
             if (cJSON_IsObject(payload)) {
-                Schedule([this, display, payload_str = std::string(cJSON_PrintUnformatted(payload))]() {
-                    display->SetChatMessage("system", payload_str.c_str());
-                });
+                char* payload_json = cJSON_PrintUnformatted(payload);
+                if (payload_json != nullptr) {
+                    Schedule([this, display, payload_str = std::string(payload_json)]() {
+                        display->SetChatMessage("system", payload_str.c_str());
+                    });
+                    cJSON_free(payload_json);
+                }
             } else {
                 ESP_LOGW(TAG, "Invalid custom message format: missing payload");
             }

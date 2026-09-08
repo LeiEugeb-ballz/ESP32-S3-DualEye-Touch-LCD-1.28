@@ -18,6 +18,24 @@ Purpose:
 * document that the local `web_companion/index.html` is not an ESP32-hosted AP/web UI;
 * defer the requested smaller nose-side caruncle/tear-duct geometry until after voice bootstrap is verified.
 
+### 2026-09-08 Memory-Pressure Development Checkpoint
+
+This checkpoint keeps the 2026-09-06 visual/voice baseline intact and only reduces avoidable SRAM strain:
+* audio queue cap reduced from 40 packets / 2.4 seconds to 18 packets / about 1.08 seconds;
+* Opus encoder output buffer reused instead of allocated per encoded frame;
+* MQTT encrypted audio buffers reused instead of allocated per sent audio packet;
+* optional custom JSON message strings freed after printing;
+* build wrapper supports a working `ESP_PYTHON` override on Windows when the ESP-IDF venv launcher is broken.
+
+Build and flash evidence:
+* build succeeded for `build_safe/xiaozhi.bin`, size `0x3b8b10`;
+* app partition free space was `0x374f0`;
+* USB flash to COM13 completed with verified hashes;
+* 180-second monitor showed stable boot, Wi-Fi connection, MQTT connection, WakeNet/AFE load, and moving idle eyes;
+* minimum SRAM during that idle monitor was `13240`;
+* a later idle-only monitor pass stayed stable with minimum SRAM `17352` and free SRAM around `28167-28683`;
+* conversation-time SRAM still needs a live monitored `Hi ESP` exchange before this can be called fully voice-stress verified.
+
 Required build proof:
 
 ```text

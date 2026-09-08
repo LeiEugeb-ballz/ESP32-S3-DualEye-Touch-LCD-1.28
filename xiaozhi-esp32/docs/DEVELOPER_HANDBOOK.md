@@ -73,6 +73,14 @@ checkpoint uses one 20-scanline internal-DMA transfer buffer per display. That
 preserves the same eye geometry while reducing internal SRAM pressure for
 WakeNet, TLS, audio, and MQTT.
 
+2026-09-08 memory-pressure hardening:
+* Audio packet queues are capped at about 1.08 seconds of 60 ms Opus frames instead of 2.4 seconds.
+* The Opus encoder output buffer is allocated once and reused by the codec task.
+* MQTT audio encryption reuses nonce and ciphertext buffers across packets and releases them when the audio channel closes.
+* Optional custom JSON message logging now frees `cJSON_PrintUnformatted()` output.
+* Verified build artifact: `build_safe/xiaozhi.bin` size `0x3b8b10`, with `0x374f0` app partition free space.
+* Verified runtime baseline: USB flash and 180-second monitor on COM13, Wi-Fi connected, MQTT connected, WakeNet/AFE loaded, idle eyes moving, no crash/reset, minimum SRAM `13240`. A later idle-only monitor pass stayed stable with minimum SRAM `17352` and free SRAM around `28167-28683`. Conversation-time SRAM should still be checked during the next live `Hi ESP` exchange.
+
 ### Option 1: Wireless TCP Push OTA (Recommended)
 Flash updated firmware without physical cables over your local network:
 ```bash

@@ -83,6 +83,7 @@ void AudioService::Initialize(AudioCodec* codec) {
         encoder_duration_ms_ = OPUS_FRAME_DURATION_MS;
         esp_opus_enc_get_frame_size(opus_encoder_, &encoder_frame_size_, &encoder_outbuf_size_);
         encoder_frame_size_ = encoder_frame_size_ / sizeof(int16_t);
+        encoder_scratch_.resize(encoder_outbuf_size_);
     }
 
     if (codec->input_sample_rate() != 16000) {
@@ -419,19 +420,21 @@ void AudioService::OpusCodecTask() {
             packet->timestamp = task->timestamp;
 
             if (opus_encoder_ != nullptr && task->pcm.size() == encoder_frame_size_) {
-                std::vector<uint8_t> buf(encoder_outbuf_size_);
+                if (encoder_scratch_.size() != static_cast<size_t>(encoder_outbuf_size_)) {
+                    encoder_scratch_.resize(encoder_outbuf_size_);
+                }
                 esp_audio_enc_in_frame_t in = {
                     .buffer = (uint8_t *)(task->pcm.data()),
                     .len = (uint32_t)(encoder_frame_size_ * sizeof(int16_t)),
                 };
                 esp_audio_enc_out_frame_t out = {
-                    .buffer = buf.data(),
+                    .buffer = encoder_scratch_.data(),
                     .len = (uint32_t)encoder_outbuf_size_,
                     .encoded_bytes = 0,
                 };
                 auto ret = esp_opus_enc_process(opus_encoder_, &in, &out);
                 if (ret == ESP_AUDIO_ERR_OK) {
-                    packet->payload.assign(buf.data(), buf.data() + out.encoded_bytes);
+                    packet->payload.assign(encoder_scratch_.data(), encoder_scratch_.data() + out.encoded_bytes);
 
                     if (task->type == kAudioTaskTypeEncodeToSendQueue) {
                         {
