@@ -8,7 +8,7 @@ import serial
 import serial.tools.list_ports
 
 
-ESP_PYTHON = r"C:\Users\txr45\.espressif\python_env\idf5.5_py3.12_env\Scripts\python.exe"
+ESP_PYTHON = os.environ.get("ESP_PYTHON", sys.executable)
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 BUILD_DIR = os.path.join(PROJECT_ROOT, "build_safe")
 
