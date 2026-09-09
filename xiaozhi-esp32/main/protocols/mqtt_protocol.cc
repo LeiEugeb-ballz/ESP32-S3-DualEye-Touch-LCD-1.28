@@ -188,6 +188,28 @@ bool MqttProtocol::SendAudio(std::unique_ptr<AudioStreamPacket> packet) {
     return udp_->Send(encrypted_audio_buffer_) > 0;
 }
 
+bool MqttProtocol::SendNatActivationPackets() {
+    std::lock_guard<std::mutex> lock(channel_mutex_);
+    if (udp_ == nullptr || aes_nonce_.size() < 16) {
+        return false;
+    }
+
+    std::string activation_packet = aes_nonce_;
+    *(uint16_t*)&activation_packet[2] = htons(0);
+    *(uint32_t*)&activation_packet[8] = htonl(0);
+
+    bool ok = true;
+    for (int i = 0; i < 3; ++i) {
+        *(uint32_t*)&activation_packet[12] = htonl(++local_sequence_);
+        if (udp_->Send(activation_packet) <= 0) {
+            ok = false;
+            break;
+        }
+        vTaskDelay(pdMS_TO_TICKS(20));
+    }
+    return ok;
+}
+
 void MqttProtocol::CloseAudioChannel(bool send_goodbye) {
     {
         std::lock_guard<std::mutex> lock(channel_mutex_);

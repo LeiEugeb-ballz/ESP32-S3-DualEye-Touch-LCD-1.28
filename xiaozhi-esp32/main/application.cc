@@ -590,6 +590,24 @@ void Application::InitializeProtocol() {
             } else {
                 ESP_LOGW(TAG, "Alert command requires status, message and emotion");
             }
+        } else if (strcmp(type->valuestring, "speak_request") == 0) {
+            auto session_id = cJSON_GetObjectItem(root, "session_id");
+            if (!cJSON_IsString(session_id)) {
+                ESP_LOGW(TAG, "speak_request requires a session_id");
+                return;
+            }
+
+            std::string preview_text;
+            auto text = cJSON_GetObjectItem(root, "text");
+            if (cJSON_IsString(text)) {
+                preview_text = text->valuestring;
+            }
+
+            Schedule([this,
+                      requested_session_id = std::string(session_id->valuestring),
+                      preview_text = std::move(preview_text)]() {
+                HandleSpeakRequest(requested_session_id, preview_text);
+            });
 #if CONFIG_RECEIVE_CUSTOM_MESSAGE
         } else if (strcmp(type->valuestring, "custom") == 0) {
             auto payload = cJSON_GetObjectItem(root, "payload");
@@ -829,6 +847,55 @@ void Application::HandleWakeWordDetectedEvent() {
     } else if (state == kDeviceStateActivating) {
         // Restart the activation check if the wake word is detected during activation
         SetDeviceState(kDeviceStateIdle);
+    }
+}
+
+void Application::HandleSpeakRequest(const std::string& requested_session_id, const std::string& preview_text) {
+    if (!protocol_) {
+        ESP_LOGW(TAG, "Ignoring speak_request: protocol is not initialized");
+        return;
+    }
+
+    auto state = GetDeviceState();
+    if (state != kDeviceStateIdle) {
+        ESP_LOGI(TAG, "Ignoring speak_request while state=%d", (int)state);
+        return;
+    }
+
+    if (!preview_text.empty()) {
+        auto display = Board::GetInstance().GetDisplay();
+        display->SetChatMessage("assistant", preview_text.c_str());
+    }
+
+    SetDeviceState(kDeviceStateConnecting);
+    Schedule([this, requested_session_id]() {
+        ContinueSpeakRequest(requested_session_id);
+    });
+}
+
+void Application::ContinueSpeakRequest(const std::string& requested_session_id) {
+    if (GetDeviceState() != kDeviceStateConnecting) {
+        return;
+    }
+
+    auto& board = Board::GetInstance();
+    board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+
+    if (!protocol_->IsAudioChannelOpened()) {
+        if (!protocol_->OpenAudioChannel()) {
+            ESP_LOGW(TAG, "Failed to open audio channel for speak_request");
+            SetDeviceState(kDeviceStateIdle);
+            return;
+        }
+    }
+
+    if (!protocol_->SendNatActivationPackets()) {
+        ESP_LOGW(TAG, "Failed to send NAT activation packets for speak_request");
+    }
+
+    SetDeviceState(kDeviceStateSpeaking);
+    if (!protocol_->SendSpeakReady(requested_session_id)) {
+        ESP_LOGW(TAG, "Failed to send speak_ready response");
     }
 }
 

@@ -70,6 +70,14 @@ Memory-pressure checkpoint dated 2026-09-08:
 * Build and USB flash to COM13 succeeded with `build_safe/xiaozhi.bin` size `0x3b8b10`; app partition free space was `0x374f0`.
 * A 180-second post-flash serial monitor showed stable boot, Wi-Fi, MQTT, WakeNet/AFE load, and moving idle eyes with minimum SRAM `13240`. A second idle-only monitor pass stayed stable with minimum SRAM `17352` and free SRAM around `28167-28683`. A wake-word conversation pass should still be monitored after this checkpoint to confirm the new conversation-time low-water mark.
 
+Greeting/speak-request checkpoint dated 2026-09-09:
+* The firmware now accepts server-initiated MQTT `speak_request` messages while idle.
+* On `speak_request`, the board opens the normal audio channel, sends UDP NAT activation packets, enters speaking state, then replies with `speak_ready`.
+* This is the low-strain path for random startup greetings: the board stays idle until the server/web UI asks it to speak.
+* Do not emulate a greeting by stuffing a long prompt into the wake-word `detect` message; that field is for wake-word text only.
+* Build succeeded with `build_safe/xiaozhi.bin` size `0x3b9560`; app partition free space was `0x36aa0`.
+* This build has not been flashed yet.
+
 Web/config reality:
 * If the Xiaozhi console shows the device online, the board has joined Wi-Fi and the fallback AP is not expected to broadcast.
 * The ESP32 config AP appears only when Wi-Fi provisioning/known-network connection fails or config mode is deliberately triggered.

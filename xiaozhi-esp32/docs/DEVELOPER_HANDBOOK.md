@@ -81,6 +81,14 @@ WakeNet, TLS, audio, and MQTT.
 * Verified build artifact: `build_safe/xiaozhi.bin` size `0x3b8b10`, with `0x374f0` app partition free space.
 * Verified runtime baseline: USB flash and 180-second monitor on COM13, Wi-Fi connected, MQTT connected, WakeNet/AFE loaded, idle eyes moving, no crash/reset, minimum SRAM `13240`. A later idle-only monitor pass stayed stable with minimum SRAM `17352` and free SRAM around `28167-28683`. Conversation-time SRAM should still be checked during the next live `Hi ESP` exchange.
 
+2026-09-09 greeting/speak-request support:
+* The device handles inbound MQTT `speak_request` only while idle.
+* Handling sequence: optional preview text -> `connecting` -> open normal audio channel -> send UDP NAT activation packets -> `speaking` -> send `speak_ready`.
+* The normal wake-word/listening flow remains unchanged.
+* WebSocket cannot receive an idle server push in this design; use MQTT for server-initiated greetings.
+* A random startup greeting should be triggered by the server/web UI using `speak_request`. Do not fake it with long wake-word `detect` text.
+* Verified build artifact: `build_safe/xiaozhi.bin` size `0x3b9560`, with `0x36aa0` app partition free space. Not flashed yet.
+
 ### Option 1: Wireless TCP Push OTA (Recommended)
 Flash updated firmware without physical cables over your local network:
 ```bash

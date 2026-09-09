@@ -157,8 +157,10 @@ private:
     void HandleNetworkDisconnectedEvent();
     void HandleActivationDoneEvent();
     void HandleWakeWordDetectedEvent();
+    void HandleSpeakRequest(const std::string& requested_session_id, const std::string& preview_text);
     void ContinueOpenAudioChannel(ListeningMode mode);
     void ContinueWakeWordInvoke(const std::string& wake_word);
+    void ContinueSpeakRequest(const std::string& requested_session_id);
 
     // Activation task (runs in background)
     void ActivationTask();

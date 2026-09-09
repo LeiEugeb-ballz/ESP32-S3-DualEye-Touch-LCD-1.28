@@ -73,6 +73,8 @@ public:
     virtual void SendStopListening();
     virtual void SendAbortSpeaking(AbortReason reason);
     virtual void SendMcpMessage(const std::string& message);
+    virtual bool SendSpeakReady(const std::string& session_id = "");
+    virtual bool SendNatActivationPackets();
 
 protected:
     std::function<void(const cJSON* root)> on_incoming_json_;

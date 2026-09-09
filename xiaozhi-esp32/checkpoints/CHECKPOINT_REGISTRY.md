@@ -36,6 +36,18 @@ Build and flash evidence:
 * a later idle-only monitor pass stayed stable with minimum SRAM `17352` and free SRAM around `28167-28683`;
 * conversation-time SRAM still needs a live monitored `Hi ESP` exchange before this can be called fully voice-stress verified.
 
+### 2026-09-09 Greeting/Speak-Request Development Checkpoint
+
+Purpose:
+* add the low-strain prerequisite for random voice greetings without opening the microphone session automatically on every boot;
+* allow the server/web UI to push a short greeting by sending MQTT `speak_request` while the board is idle;
+* keep the normal `Hi ESP` wake-word path unchanged.
+
+Build evidence:
+* build succeeded for `build_safe/xiaozhi.bin`, size `0x3b9560`;
+* app partition free space was `0x36aa0`;
+* this checkpoint has not been flashed or runtime-validated yet.
+
 Required build proof:
 
 ```text
