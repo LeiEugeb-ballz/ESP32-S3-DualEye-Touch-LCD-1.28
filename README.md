@@ -1,8 +1,12 @@
-# ESP32-S3-DualEye-Touch-LCD-1.28
+# JAFR DualEye Companion
 
 Xiaozhi Dual-Eye AI Companion firmware for the **Waveshare ESP32-S3-DualEye-Touch-LCD-1.28** board.
 
 ## Project Structure
+
+Workspace path:
+
+`C:\Users\txr45\Documents\Project TakeOver\JAFR-Workspace\JAFR-DualEye-Companion`
 
 ```
 xiaozhi-esp32/          Production firmware (ESP-IDF 5.5.2+)
@@ -10,12 +14,20 @@ xiaozhi-esp32/          Production firmware (ESP-IDF 5.5.2+)
 │   └── boards/waveshare/esp32-s3-dualeye-lcd-1.28/
 │                       Board-specific hardware drivers, display engine, and eye presets
 ├── docs/               Technical documentation
-└── scripts/            Build and deployment utilities
+└── tools/              Build, flash, monitor, and conversion utilities
 ```
 
 ## Quick Start
 
 See [xiaozhi-esp32/README.md](xiaozhi-esp32/README.md) for build instructions, hardware specs, and documentation.
+
+From `xiaozhi-esp32/`, the relocation-safe build command is:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools\build_firmware.ps1 -BuildDir build_safe
+```
+
+Flash only after explicit hardware approval. The COM13 helper now resolves build artifacts relative to this repository instead of the old standalone checkout path.
 
 ## Canonical Firmware & Checkpoint Registry
 

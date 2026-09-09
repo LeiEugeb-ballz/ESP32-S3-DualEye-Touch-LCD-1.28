@@ -3,8 +3,10 @@ import re
 import math
 
 SOURCE_DIR = r"C:\Users\txr45\Downloads\TFT_eSPI-2.5.43\TFT_eSPI-2.5.43\examples\Generic\Animated_Eyes_2\data"
-OUT_H = r"C:\Users\txr45\Documents\Eyes\ESP32-S3-DualEye-Touch-LCD-1.28\xiaozhi-esp32\main\boards\waveshare\esp32-s3-dualeye-lcd-1.28\eye_presets.h"
-OUT_CC = r"C:\Users\txr45\Documents\Eyes\ESP32-S3-DualEye-Touch-LCD-1.28\xiaozhi-esp32\main\boards\waveshare\esp32-s3-dualeye-lcd-1.28\eye_presets.cc"
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+OUT_DIR = os.path.join(PROJECT_ROOT, "main", "boards", "waveshare", "esp32-s3-dualeye-lcd-1.28")
+OUT_H = os.path.join(OUT_DIR, "eye_presets.h")
+OUT_CC = os.path.join(OUT_DIR, "eye_presets.cc")
 
 def parse_header(filepath):
     with open(filepath, 'r', errors='ignore') as f:

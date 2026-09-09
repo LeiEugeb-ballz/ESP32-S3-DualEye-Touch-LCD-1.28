@@ -4,7 +4,8 @@ import time
 import subprocess
 
 ESP_PYTHON = r"C:\Users\txr45\.espressif\python_env\idf5.5_py3.12_env\Scripts\python.exe"
-BUILD_DIR = r"C:\Users\txr45\Documents\Eyes\ESP32-S3-DualEye-Touch-LCD-1.28\xiaozhi-esp32\build"
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+BUILD_DIR = os.path.join(PROJECT_ROOT, "build_safe")
 PORT = "COM14"
 
 flash_cmd = [

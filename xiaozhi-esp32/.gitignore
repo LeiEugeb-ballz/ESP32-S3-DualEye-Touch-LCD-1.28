@@ -4,6 +4,7 @@ managed_components/
 build/
 build_codex/
 build_safe/
+build_safe*/
 dist/
 .vscode/
 .devcontainer/

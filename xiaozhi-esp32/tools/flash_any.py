@@ -5,7 +5,8 @@ import subprocess
 import serial.tools.list_ports
 
 ESP_PYTHON = r"C:\Users\txr45\\.espressif\python_env\idf5.5_py3.12_env\Scripts\python.exe".replace("\\\\", "\\")
-BUILD_DIR = r"C:\Users\txr45\Documents\Eyes\ESP32-S3-DualEye-Touch-LCD-1.28\xiaozhi-esp32\build"
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+BUILD_DIR = os.path.join(PROJECT_ROOT, "build_safe")
 
 print("=" * 65)
 print("ESP32-S3 Active Flasher & Tester")
