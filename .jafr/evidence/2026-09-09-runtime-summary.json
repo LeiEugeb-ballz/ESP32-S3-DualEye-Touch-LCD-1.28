@@ -1,0 +1,40 @@
+{
+  "assessedAt": "2026-09-10T08:38:27.0702672+02:00",
+  "scope": "Historical local log review; no live hardware operation",
+  "serial": {
+    "path": "xiaozhi-esp32/build_safe/serial-com13.log",
+    "lastWriteTime": "2026-09-09T14:28:03.4090124+02:00",
+    "sha256": "5DD5E4BC9915626FE9B7D063AC7952688193A57F8BBCE80285BFBFE27670D3B7",
+    "lineCount": 216,
+    "firmwareIdentityCaptured": false
+  },
+  "flash": {
+    "path": "xiaozhi-esp32/build_safe/flash-com13.log",
+    "lastWriteTime": "2026-09-09T14:24:49.7635172+02:00",
+    "sha256": "3E3A87E88404EB3631F9146943A7CDCA3765FD74F2CE32C1ED250EAA2074E837",
+    "verifiedImageCount": 5
+  },
+  "wakeDetected": true,
+  "transitions": [
+    "StateMachine: State: idle -> connecting",
+    "StateMachine: State: connecting -> listening",
+    "StateMachine: State: listening -> speaking",
+    "StateMachine: State: speaking -> listening",
+    "StateMachine: State: listening -> speaking",
+    "StateMachine: State: speaking -> listening",
+    "StateMachine: State: listening -> idle"
+  ],
+  "speakingTurns": 2,
+  "minimumInternalSramBytes": 972.0,
+  "panicOrResetSignatures": 0,
+  "outOfOrderWarnings": 2,
+  "limitations": [
+    "No boot/version/hash header: association with flash relies on chronology and image size.",
+    "No long soak, greeting, fallback AP, OTA or alternate-slot acceptance in this capture.",
+    "No panic in this interval is not proof of adequate memory margin."
+  ],
+  "observations": [
+    "Eyes continue rendering during and after voice replies.",
+    "Both left and right touch inputs apply presets through the renderer."
+  ]
+}

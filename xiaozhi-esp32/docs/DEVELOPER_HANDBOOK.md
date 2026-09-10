@@ -2,6 +2,13 @@
 
 This handbook contains all essential commands, workflows, and procedures needed to build, flash, update, test, and maintain the **Xiaozhi Dual-Eye AI Companion System**.
 
+Current assessment: [project STATUS.md](../../STATUS.md), updated 2026-09-10.
+The local ESP-IDF 5.5.5 build and 43 host checks pass. Existing September 9 logs
+confirm voice/touch/eye operation, but conversation minimum internal SRAM was
+972 bytes. Production acceptance remains open; the graphics baseline is preserved.
+Use `tools/build_firmware.ps1 -BuildDir build_safe -NoDriveAlias` for the current
+relocated cache and `pwsh -File tools/verify_baseline.ps1` for host validation.
+
 ---
 
 ## 1. Environment Setup
@@ -79,15 +86,15 @@ WakeNet, TLS, audio, and MQTT.
 * MQTT audio encryption reuses nonce and ciphertext buffers across packets and releases them when the audio channel closes.
 * Optional custom JSON message logging now frees `cJSON_PrintUnformatted()` output.
 * Verified build artifact: `build_safe/xiaozhi.bin` size `0x3b8b10`, with `0x374f0` app partition free space.
-* Verified runtime baseline: USB flash and 180-second monitor on COM13, Wi-Fi connected, MQTT connected, WakeNet/AFE loaded, idle eyes moving, no crash/reset, minimum SRAM `13240`. A later idle-only monitor pass stayed stable with minimum SRAM `17352` and free SRAM around `28167-28683`. Conversation-time SRAM should still be checked during the next live `Hi ESP` exchange.
+* Historical idle runtime baseline: USB flash and 180-second monitor on COM13, Wi-Fi connected, MQTT connected, WakeNet/AFE loaded, idle eyes moving, no crash/reset, minimum SRAM `13240`. A later idle-only monitor pass stayed stable with minimum SRAM `17352` and free SRAM around `28167-28683`. Newer September 9 logs show two voice exchanges and a minimum of only `972` bytes; see current STATUS.md for the open memory-margin acceptance issue.
 
 2026-09-09 greeting/speak-request support:
 * The device handles inbound MQTT `speak_request` only while idle.
 * Handling sequence: optional preview text -> `connecting` -> open normal audio channel -> send UDP NAT activation packets -> `speaking` -> send `speak_ready`.
 * The normal wake-word/listening flow remains unchanged.
 * WebSocket cannot receive an idle server push in this design; use MQTT for server-initiated greetings.
-* A random startup greeting should be triggered by the server/web UI using `speak_request`. Do not fake it with long wake-word `detect` text.
-* Verified build artifact: `build_safe/xiaozhi.bin` size `0x3b9560`, with `0x36aa0` app partition free space. Not flashed yet.
+* A random startup greeting requires a server sender using `speak_request`; that sender/boot trigger is not implemented by the checked-in web companion. Do not fake it with long wake-word `detect` text.
+* Verified build artifact: `build_safe/xiaozhi.bin` size `0x3b9560`, with `0x36aa0` app partition free space. September 9 flash logs verify this image size and matching assets; subsequent serial logs prove normal voice interaction, not a greeting. The serial capture has no boot hash/version header.
 
 ### Option 1: Wireless TCP Push OTA (Recommended)
 Flash updated firmware without physical cables over your local network:
@@ -127,20 +134,21 @@ See [`checkpoints/CHECKPOINT_REGISTRY.md`](../checkpoints/CHECKPOINT_REGISTRY.md
 
 ## 4. Uncanny Eye Presets Pack
 
-The firmware includes 10 photorealistic, high-performance eye presets:
+The firmware defines 11 eye presets; IDs below match `eye_presets.h`:
 
 | ID | Preset Key | Display Style | Pupil Shape | Notes |
 | :---: | :--- | :--- | :--- | :--- |
 | **0** | `default` | Human Blue | Circular | Default on boot |
-| **1** | `cat` | Cat Yellow | Vertical Slit | Feline aesthetic |
-| **2** | `dragon` | Dragon Fire | Vertical Slit | Fiery orange iris |
-| **3** | `terminator`| Cyborg Red | Circular Glow | Mechanical red eye |
-| **4** | `doe` | Doe Anime | Large Circular | Soft anime aesthetic |
-| **5** | `owl` | Owl Amber | Circular | Amber golden iris |
-| **6** | `goat` | Goat Horizontal | Horizontal Bar | Caprine pupil |
-| **7** | `nauga` | Monster Nauga | Circular | Playful cartoon creature |
-| **8** | `newt` | Newt Orange | Circular | Amphibian spotted |
-| **9** | `no_sclera` | Dragon Full | Full Coverage | Fiery edge-to-edge |
+| **1** | `japanese` | Japanese | Preset-defined | Additional preset |
+| **2** | `cat` | Cat Yellow | Vertical Slit | Feline aesthetic |
+| **3** | `dragon` | Dragon Fire | Vertical Slit | Fiery orange iris |
+| **4** | `terminator`| Cyborg Red | Circular Glow | Mechanical red eye |
+| **5** | `doe` | Doe Anime | Large Circular | Soft anime aesthetic |
+| **6** | `owl` | Owl Amber | Circular | Amber golden iris |
+| **7** | `goat` | Goat Horizontal | Horizontal Bar | Caprine pupil |
+| **8** | `nauga` | Monster Nauga | Circular | Playful cartoon creature |
+| **9** | `newt` | Newt Orange | Circular | Amphibian spotted |
+| **10** | `no_sclera` | Dragon Full | Full Coverage | Fiery edge-to-edge |
 
 ### Regenerating Presets from Assets
 To regenerate the preset C++ tables from header data:

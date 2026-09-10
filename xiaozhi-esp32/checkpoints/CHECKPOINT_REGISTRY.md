@@ -5,7 +5,21 @@ Any future agent or developer must consult this document before flashing or roll
 
 ---
 
-## 1. Active Baseline Checkpoint (The Golden Build)
+## 1. Current development checkpoint — 2026-09-10
+
+See [current project status](../../STATUS.md) and the
+[artifact hash manifest](../../.jafr/evidence/baseline-artifacts.json).
+Source baseline is `93ea208`; local flashable copies are preserved under
+`.jafr/checkpoints/2026-09-10-baseline/` at the project root (ignored by Git).
+These are separate generated images with no NVS dump, not a full-device backup.
+
+September 10 local build/host checks passed. September 9 flash/serial logs show
+Hi ESP, two voice replies, moving eyes and both touch inputs. Minimum internal SRAM
+fell to 972 bytes during conversation; extended acceptance remains open.
+The current source defines 11 presets; AEC is disabled in the current generated
+configuration. Older feature tables below describe historical checkpoints only.
+
+## Historical checkpoints
 
 ### 2026-09-06 Active Development Checkpoint
 
@@ -34,7 +48,7 @@ Build and flash evidence:
 * 180-second monitor showed stable boot, Wi-Fi connection, MQTT connection, WakeNet/AFE load, and moving idle eyes;
 * minimum SRAM during that idle monitor was `13240`;
 * a later idle-only monitor pass stayed stable with minimum SRAM `17352` and free SRAM around `28167-28683`;
-* conversation-time SRAM still needs a live monitored `Hi ESP` exchange before this can be called fully voice-stress verified.
+* this was idle-only evidence; the newer September 9 conversation capture reached minimum SRAM `972`, so sustained voice-stress acceptance remains open.
 
 ### 2026-09-09 Greeting/Speak-Request Development Checkpoint
 
@@ -46,7 +60,7 @@ Purpose:
 Build evidence:
 * build succeeded for `build_safe/xiaozhi.bin`, size `0x3b9560`;
 * app partition free space was `0x36aa0`;
-* this checkpoint has not been flashed or runtime-validated yet.
+* September 9 flash logs verify this app size and matching assets; following serial logs show normal voice interaction. They do not verify a startup greeting or capture the running firmware hash/version.
 
 Required build proof:
 
@@ -77,7 +91,10 @@ Do not rely on an app-only flash for wake-word changes. The assets partition is 
   python checkpoints/restore_working_build.py COM13
   ```
 
-### Verified Features on Hardware:
+### Historical Step 2 feature claims (not current acceptance)
+
+This table is retained as provenance. Its AEC/persona/FPS claims are not revalidated
+for the current build. Current measurements and gaps are in the project STATUS.md.
 | Component | Status | Verified Details |
 | :--- | :--- | :--- |
 | **Wake Word** | ✅ Working | `wn9_hiesp` ("Hi, ESP") listening via hardware AFE pipeline |
