@@ -1,5 +1,0 @@
-Started: 2026-09-10T08:38:28.5617965+02:00
-Command: pwsh -NoProfile -File tools/test_workspace.ps1
-PASS: unknown, complete evidence, generated build output exclusion, board/source/config/lockfile freshness, missing log, invalid JSON, workspace path containment
-Finished: 2026-09-10T08:38:31.4147107+02:00
-Exit code: 0

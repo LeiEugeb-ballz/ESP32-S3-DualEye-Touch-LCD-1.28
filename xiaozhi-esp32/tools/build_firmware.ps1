@@ -54,7 +54,9 @@ function Update-TextFileLiteral {
         return $false
     }
     $text = Get-Content -LiteralPath $Path -Raw
-    if ($text.Contains($NewText)) {
+    # Empty NewText means remove OldText. String.Contains('') is always true,
+    # which previously skipped every requested removal and left broken -L paths.
+    if ($NewText.Length -gt 0 -and $text.Contains($NewText)) {
         return $false
     }
     if ($text.Contains($OldText)) {
@@ -131,7 +133,13 @@ target_link_libraries(${COMPONENT_LIB}  INTERFACE esp_image_effects)
 }
 
 $ProjectRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot '..')).Path
-$IdfPath = if ($env:IDF_PATH) { $env:IDF_PATH } else { 'C:\Espressif\frameworks\esp-idf' }
+$IdfPath = if ($env:IDF_PATH) {
+    $env:IDF_PATH
+} elseif (Test-Path -LiteralPath 'C:\Espressif\frameworks\esp-idf-v5.5') {
+    'C:\Espressif\frameworks\esp-idf-v5.5'
+} else {
+    'C:\Espressif\frameworks\esp-idf'
+}
 $IdfToolsPath = if ($env:IDF_TOOLS_PATH) { $env:IDF_TOOLS_PATH } else { Join-Path $env:USERPROFILE '.espressif' }
 $EspToolStore = Join-Path $IdfToolsPath 'tools'
 $IdfPy = Join-Path $IdfPath 'tools\idf.py'

@@ -34,13 +34,14 @@ CONFIG_ESP_WIFI_ENTERPRISE_SUPPORT=n
 
 CONFIG_CODEC_I2C_BACKWARD_COMPATIBLE=n
 
-# Voice baseline for this board checkpoint.
-# The user-facing wake phrase is "Hi ESP"; keep app language and speech assets aligned.
+# Dedicated Graphics Engine Mode:
+# Voice/audio pipeline is offloaded to secondary board.
+# All internal SRAM and CPU cores dedicated to 60 FPS Uncanny Eyes rendering.
 CONFIG_LANGUAGE_EN_US=y
-CONFIG_USE_AFE_WAKE_WORD=y
-CONFIG_SEND_WAKE_WORD_DATA=y
-CONFIG_SR_WN_WN9_HIESP=y
-CONFIG_SR_WN_WN9_NIHAOXIAOZHI_TTS=n
+CONFIG_USE_AFE_WAKE_WORD=n
+CONFIG_SEND_WAKE_WORD_DATA=n
+CONFIG_SR_WN_WN9_HIESP=n
+CONFIG_USE_AUDIO_PROCESSOR=n
 
 # Fix ML307 FIFO Overflow
 CONFIG_UART_ISR_IN_IRAM=y
@@ -84,3 +85,21 @@ CONFIG_LV_USE_WIN=n
 CONFIG_LV_BUILD_EXAMPLES=n
 CONFIG_LV_BUILD_DEMOS=n
 
+
+# ==============================================================================
+# FEATURE FLAG: Acoustic Echo Cancellation (AEC) / Acoustic Barge-In
+# ==============================================================================
+# Device-side AEC allows interrupting the AI while it speaks by voice.
+# Default: OFF (AEC disabled to conserve internal SRAM headroom).
+# Note: Enabling device AEC (CONFIG_USE_DEVICE_AEC=y) requires ~15-20KB of contiguous
+# internal SRAM for the reference echo filter. During conversation + TTS decoding,
+# minimum SRAM drops to ~1KB in stress tests. Touch or wake-word barge-in remains
+# active and safe at all times without memory overhead.
+# To opt into experimental device-side AEC:
+#   CONFIG_USE_DEVICE_AEC=y
+#   CONFIG_USE_SERVER_AEC=n
+# Server-side AEC (if handled by gateway/cloud):
+#   CONFIG_USE_SERVER_AEC=y
+#   CONFIG_USE_DEVICE_AEC=n
+CONFIG_USE_DEVICE_AEC=n
+CONFIG_USE_SERVER_AEC=n

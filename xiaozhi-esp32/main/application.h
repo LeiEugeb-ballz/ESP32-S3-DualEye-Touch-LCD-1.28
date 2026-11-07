@@ -17,6 +17,7 @@
 #include "audio_service.h"
 #include "device_state.h"
 #include "device_state_machine.h"
+#include "voice_profile.h"
 
 // Main event bits
 #define MAIN_EVENT_SCHEDULE             (1 << 0)
@@ -121,6 +122,9 @@ public:
      * This includes closing audio channel, resetting protocol and ota objects
      */
     void ResetProtocol();
+    std::string GetVoiceProfileStatusJson();
+    bool RequestVoiceProfile(const std::string& profile, const std::string& url,
+                             const std::string& token, std::string& error);
 
 private:
     Application();
@@ -137,11 +141,23 @@ private:
     std::string last_error_message_;
     AudioService audio_service_;
     std::unique_ptr<Ota> ota_;
+    std::mutex voice_profile_mutex_;
+    VoiceProfile active_voice_profile_;
+    VoiceProfile pending_voice_profile_;
+    bool voice_profile_pending_ = false;
+    bool voice_profile_probe_running_ = false;
+    bool voice_profile_probe_done_ = false;
+    std::unique_ptr<Protocol> voice_profile_candidate_;
+    std::string voice_profile_error_;
+    std::atomic<uint32_t> protocol_generation_{0};
+    void ApplyPendingVoiceProfile();
 
     std::function<void(const std::string&)> mcp_broadcast_callback_;
 
     bool has_server_time_ = false;
     bool aborted_ = false;
+    std::atomic<bool> accepting_audio_{false};
+    bool playback_completion_pending_ = false;
     bool assets_version_checked_ = false;
     bool play_popup_on_listening_ = false;  // Flag to play popup sound after state changes to listening
     int clock_ticks_ = 0;
@@ -168,7 +184,7 @@ private:
     // Helper methods
     void CheckAssetsVersion();
     void CheckNewVersion();
-    void InitializeProtocol();
+    void InitializeProtocol(std::unique_ptr<Protocol> candidate = nullptr);
     void ShowActivationCode(const std::string& code, const std::string& message);
     void SetListeningMode(ListeningMode mode);
     ListeningMode GetDefaultListeningMode() const;

@@ -6,6 +6,7 @@
 #include <condition_variable>
 #include <chrono>
 #include <mutex>
+#include <atomic>
 
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -98,6 +99,7 @@ struct AudioTask {
     AudioTaskType type;
     std::vector<int16_t> pcm;
     uint32_t timestamp;
+    uint32_t playback_generation = 0;
 };
 
 struct DebugStatistics {
@@ -120,6 +122,7 @@ public:
     const std::string& GetLastWakeWord() const;
     bool IsVoiceDetected() const { return voice_detected_; }
     bool IsIdle();
+    bool IsPlaybackIdle();
     void WaitForPlaybackQueueEmpty();
     bool IsWakeWordRunning() const { return xEventGroupGetBits(event_group_) & AS_EVENT_WAKE_WORD_RUNNING; }
     bool IsAudioProcessorRunning() const { return xEventGroupGetBits(event_group_) & AS_EVENT_AUDIO_PROCESSOR_RUNNING; }
@@ -177,6 +180,9 @@ private:
     std::deque<std::unique_ptr<AudioStreamPacket>> audio_testing_queue_;
     std::deque<std::unique_ptr<AudioTask>> audio_encode_queue_;
     std::deque<std::unique_ptr<AudioTask>> audio_playback_queue_;
+    std::atomic<uint32_t> playback_generation_{0};
+    bool decode_in_flight_ = false;  // guarded by audio_queue_mutex_
+    bool output_in_flight_ = false;
     // For server AEC
     std::deque<uint32_t> timestamp_queue_;
 

@@ -121,6 +121,23 @@ public:
     // Capacitive Touch Integration & Transitions
     static void SetTouchHandles(esp_lcd_touch_handle_t tp1, esp_lcd_touch_handle_t tp2);
     static void SlideEyeIn(bool is_left, float start_offset_x);
+
+    // Sleep / Eyelids Mode
+    static void SetSleeping(bool sleeping);
+    static bool IsSleeping();
+
+    // Persona, Mood & Direct Gaze Controls (for UART & WebUI)
+    static void SetMood(const std::string& mood);
+    static std::string GetMood();
+    static void SetManualGaze(float x, float y);
+    static void ClearManualGaze();
+    static bool IsManualGaze();
+    static void SetManualPupil(float dilation);
+    static void ClearManualPupil();
+    static void TriggerBlink();
+    static float GetFps();
+    static void SetEyeScale(float scale);
+    static float GetEyeScale();
 };
 
 // Single eye display instance representing one physical screen surface

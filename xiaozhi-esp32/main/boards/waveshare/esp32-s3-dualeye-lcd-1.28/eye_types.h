@@ -18,19 +18,15 @@ static inline uint16_t AlphaBlendRGB565(uint16_t fg, uint16_t bg, uint16_t alpha
     if (alpha >= 256) return fg;
     if (alpha == 0) return bg;
 
-    uint32_t fg_r = RGB565_R(fg);
-    uint32_t fg_g = RGB565_G(fg);
-    uint32_t fg_b = RGB565_B(fg);
+    uint32_t fg_rb = fg & 0xF81F;
+    uint32_t bg_rb = bg & 0xF81F;
+    uint32_t out_rb = ((fg_rb * alpha + bg_rb * (256 - alpha)) >> 8) & 0xF81F;
 
-    uint32_t bg_r = RGB565_R(bg);
-    uint32_t bg_g = RGB565_G(bg);
-    uint32_t bg_b = RGB565_B(bg);
+    uint32_t fg_g = fg & 0x07E0;
+    uint32_t bg_g = bg & 0x07E0;
+    uint32_t out_g = ((fg_g * alpha + bg_g * (256 - alpha)) >> 8) & 0x07E0;
 
-    uint32_t out_r = (fg_r * alpha + bg_r * (256 - alpha)) >> 8;
-    uint32_t out_g = (fg_g * alpha + bg_g * (256 - alpha)) >> 8;
-    uint32_t out_b = (fg_b * alpha + bg_b * (256 - alpha)) >> 8;
-
-    return (uint16_t)((out_r << 11) | (out_g << 5) | out_b);
+    return (uint16_t)(out_rb | out_g);
 }
 
 // Immutable Eye Asset Specification
@@ -48,6 +44,8 @@ struct EyeAssetConfig {
     const uint8_t* upper_eyelid_map; // 240x240 upper eyelid heightfield
     const uint8_t* lower_eyelid_map; // 240x240 lower eyelid heightfield
     uint8_t default_pupil_radius;    // Default radius in polar steps (32)
+    uint8_t aperture_half_width;     // Base almond aperture half-width (e.g., 102). 0 = disabled.
+    uint8_t aperture_half_height;    // Base almond aperture half-height (e.g., 60).
 };
 
 // Render parameters for single frame execution
@@ -59,6 +57,7 @@ struct RenderParams {
     uint8_t lower_eyelid_threshold = 0;  // 0 = open, 255 = fully closed
     uint16_t eyelid_color = 0x0000;      // Eyelid skin/background color (RGB565)
     bool enable_highlights = true;       // Render corneal specular highlights
+    float scale = 0.86f;                 // Eye scale factor to fit full eye relatively into circular display (default 0.86)
 };
 
 } // namespace EyeRenderer

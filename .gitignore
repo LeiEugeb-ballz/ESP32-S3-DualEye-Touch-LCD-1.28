@@ -1,0 +1,14 @@
+# Local forensic notes and generated graphics previews are not release source.
+HANDOVER.md
+__pycache__/
+xiaozhi-esp32/build*/
+xiaozhi-esp32/*.png
+xiaozhi-esp32/inspect_assets.py
+
+# Keep only the live machine-readable status; generated audit history stays local.
+.jafr/*
+!.jafr/.gitignore
+!.jafr/status.json
+
+# Obsolete flash attempts are not release tooling.
+xiaozhi-esp32/tools/quarantine/

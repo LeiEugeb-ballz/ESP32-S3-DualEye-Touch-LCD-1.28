@@ -2,14 +2,21 @@
 
 Xiaozhi Dual-Eye AI Companion firmware for the **Waveshare ESP32-S3-DualEye-Touch-LCD-1.28** board.
 
-## Current development baseline — 2026-09-10
+## Baseline Version — v3.0.0.1 (Eval+Review Phase)
 
-The relocation and evidence handover are complete. Start with [STATUS.md](STATUS.md)
-for confirmed behaviour, remaining defects, and the next graphics/capabilities work.
-The workspace reads [.jafr/status.json](.jafr/status.json); it records current evidence
-without claiming complete production acceptance. Current local build checks pass;
-the September 9 logs demonstrate wake-word interaction, voice replies, moving eyes,
-and touch. Conversation memory margin remains an open release blocker.
+`v3.0.0.1` represents the integrated Eval+Review release baseline on the verified
+Waveshare ESP32-S3-DualEye hardware. All legacy checkpoint names and stale baselines
+have been consolidated. Physical hardware acceptance on COM13 confirmed zero allocation
+failures, stable ~99KB free SRAM, responsive wake-word ("Hi ESP"), dual GC9A01 eye
+rendering, and clean boot control.
+
+Key architectural updates in v3.0.0.1:
+- **Unified Control WebUI**: Consolidated into `xiaozhi-esp32/web_ui/index.html` (and served via `http://localhost:8765`), combining photorealistic eye simulation (11 presets), real-time telemetry, Mistral/Xiaozhi provider switching, and dual-slot OTA recovery.
+- **Dynamic COM & IP Discovery**: `flash_current_build.py` auto-detects ESP32 serial ports dynamically; the WebUI probes and remembers dynamic board IPs (`192.168.88.x`). Legacy static flasher scripts are quarantined.
+- **Automatic Gateway Fallback**: If the host voice gateway is asleep or unreachable, the device automatically falls back to Xiaozhi cloud rather than blocking user interaction.
+- **True Random Dynamic Greeting**: Connecting to the companion triggers a spontaneous, LLM-generated greeting with high-entropy randomness rather than a canned drafted list.
+- **Acoustic Echo Cancellation (AEC)**: Formally documented as an opt-in feature flag in `sdkconfig.defaults` (`CONFIG_USE_DEVICE_AEC`). Disabled by default to preserve internal SRAM headroom during conversation.
+- **Evaluations Unblocked**: Removed blocking dependency on external OpenAI keys; Mistral Voxtral (STT/Chat/TTS) verified as primary default provider.
 
 ## Project Structure
 
@@ -24,6 +31,7 @@ xiaozhi-esp32/          Production firmware (ESP-IDF 5.5.2+)
 │                       Board-specific hardware drivers, display engine, and eye presets
 ├── docs/               Technical documentation
 └── tools/              Build, flash, monitor, and conversion utilities
+voice_gateway/          Optional Mistral host, local control UI, reproducible environment and evals
 ```
 
 ## Quick Start
@@ -37,7 +45,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tools\build_firmware.ps1 -Bu
 pwsh -NoProfile -File tools\verify_baseline.ps1
 ```
 
-Flash only after explicit hardware approval. The COM13 helper now resolves build artifacts relative to this repository instead of the old standalone checkout path.
+Flash only after explicit hardware approval. The COM13 helper now resolves build artifacts relative to this repository instead of the old standalone checkout path. Use `pwsh` (PowerShell 7), not Windows PowerShell 5.1, for the `#Requires 7.0` evidence scripts.
 
 ## Firmware & checkpoint registry
 

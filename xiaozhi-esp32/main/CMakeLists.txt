@@ -109,6 +109,10 @@ if(CONFIG_BOARD_TYPE_WAVESHARE_S3_DUALEYE_LCD_1_28)
     if(NOT DUALEYE_BOOT_CONTROL_SOURCE IN_LIST SOURCES)
         list(APPEND SOURCES ${DUALEYE_BOOT_CONTROL_SOURCE})
     endif()
+    set(DUALEYE_UART_CONTROL_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/boards/waveshare/esp32-s3-dualeye-lcd-1.28/esp_now_control.cc)
+    if(NOT DUALEYE_UART_CONTROL_SOURCE IN_LIST SOURCES)
+        list(APPEND SOURCES ${DUALEYE_UART_CONTROL_SOURCE})
+    endif()
 endif()
 
 # Select audio processor according to Kconfig

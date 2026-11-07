@@ -457,7 +457,7 @@
         </div>
         <div class="telemetry-card">
           <div class="telemetry-label">Voice / Persona</div>
-          <div class="telemetry-value">English (Taiwanese Persona)</div>
+          <div class="telemetry-value">Check the active provider's configuration</div>
         </div>
         <div class="telemetry-card">
           <div class="telemetry-label">Target Subnet</div>
@@ -465,7 +465,7 @@
         </div>
         <div class="telemetry-card">
           <div class="telemetry-label">Barge-In Mode</div>
-          <div class="telemetry-value" style="color: var(--accent-purple);">AEC Echo Cancellation</div>
+          <div class="telemetry-value" style="color: var(--accent-purple);">AEC disabled — barge-in unverified</div>
         </div>
         <div class="telemetry-card">
           <div class="telemetry-label">Boot Control</div>
@@ -475,7 +475,7 @@
 
       <div class="info-box">
         <strong style="color: var(--text-primary); display: block; margin-bottom: 0.4rem;">Zero-Mock Hardware Connection</strong>
-        The board is currently <strong>unplugged</strong>. When you reconnect the USB or power up the board on Wi-Fi, click <strong>Probe</strong> above to ping the device. No fake FPS or simulated connection will be displayed unless the hardware actively responds.
+        This is the legacy eye preview. Connection state is unknown until queried. Use the current <a href="http://localhost:8765">JAPA voice control board</a> for provider/personality settings and live device evidence; preview animations are not hardware measurements.
       </div>
 
       <div style="display: flex; flex-direction: column; gap: 0.75rem;">
@@ -533,12 +533,8 @@
       statusText.textContent = `Probing ${ip}...`;
 
       try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 2000);
-        
-        // Attempt HTTP probe
-        await fetch(`http://${ip}/`, { mode: 'no-cors', signal: controller.signal });
-        clearTimeout(timeout);
+        const status = await fetchBootControl('/boot/status');
+        if (status.service !== 'dualeye_boot_control') throw new Error('Not a JAPA boot-control endpoint');
         
         statusBadge.className = 'status-badge online';
         statusText.textContent = `Online (${ip})`;
@@ -553,13 +549,14 @@
       dispSubnet.textContent = boardIpInput.value.trim();
     });
 
-    async function fetchBootControl(path) {
+    async function fetchBootControl(path, options = {}) {
       const ip = boardIpInput.value.trim();
       if (!ip) throw new Error('Board IP is required');
+      if (location.protocol === 'file:') throw new Error('Open the local JAPA control board at http://localhost:8765. A file page is not a trusted device-control origin.');
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 4000);
       try {
-        const res = await fetch(`http://${ip}:3233${path}`, { signal: controller.signal });
+        const res = await fetch(`http://${ip}:3233${path}`, { ...options, signal: controller.signal });
         const text = await res.text();
         let parsed;
         try {
@@ -571,6 +568,9 @@
           throw new Error(JSON.stringify(parsed, null, 2));
         }
         return parsed;
+      } catch (error) {
+        if (error.name === 'AbortError') throw new Error('Device timed out on port 3233. Check power, Wi-Fi and the current IP address.');
+        throw error;
       } finally {
         clearTimeout(timeout);
       }
@@ -591,7 +591,9 @@
       if (!confirmed) return;
       bootStatusOutput.textContent = `Requesting switch to ota_${slot}...`;
       try {
-        const result = await fetchBootControl(`/boot/switch?slot=${slot}&confirm=SWITCH`);
+        const voice = await fetchBootControl('/voice/status');
+        if (!voice.control_token || !voice.can_switch) throw new Error('Device must be idle and support protected boot control');
+        const result = await fetchBootControl(`/boot/switch?slot=${slot}&confirm=SWITCH`, {method:'POST', headers:{'X-JAPA-Control':voice.control_token}});
         bootStatusOutput.textContent = JSON.stringify(result, null, 2);
       } catch (err) {
         bootStatusOutput.textContent = `Boot switch refused/failed:\n${err.message}`;

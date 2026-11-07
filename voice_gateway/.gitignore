@@ -1,0 +1,7 @@
+.venv/
+__pycache__/
+*.pyc
+.env
+selection.json
+.pairing-token
+*.log

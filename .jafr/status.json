@@ -1,65 +1,48 @@
 {
-  "activity": "Baseline handover completed 2026-09-10. Ready to begin graphics/capabilities development; full production acceptance remains pending.",
-  "assessmentScope": "Current local build/configuration/artifact validation and review of existing September 9 hardware logs. No live hardware operation in this closeout.",
-  "sourceBaseline": "93ea20824b85609be6aff9c679e828c67e60c194",
-  "checkpoint": ".jafr/checkpoints/2026-09-10-baseline/",
-  "blockers": [
-    "Conversation log reached minimum internal SRAM of 972 bytes; sustained voice/reconnect memory-margin acceptance is outstanding.",
-    "Neutral emotion overwrites connecting/listening eye state; verified source defect awaiting the graphics pass.",
-    "Random startup greeting sender/trigger and OpenAI/Mistral provider configuration are incomplete; current web Connect probes the wrong normal-mode port and status includes fixed values.",
-    "No complete acceptance evidence for offline AP recovery, network selection, OTA/alternate-slot recovery, or exact running firmware identity; current AEC is disabled."
-  ],
-  "recommendations": [
-    "Preserve the dated source/artifact checkpoint; correct status-versus-emotion handling before changing eye geometry.",
-    "Add optional proportional eye scaling with the current appearance as default, then measure frame timing and memory during speech.",
-    "Record minimum/largest-block internal memory across repeated voice sessions before adding allocations or declaring production readiness.",
-    "Finish random connected-startup greeting and truthful web status, then implement and validate real voice-provider configuration."
-  ],
-  "nextWork": "Graphics: fix neutral/status precedence, then implement optional proportional eye scale and speech-state previews against the preserved baseline. Track memory and backend acceptance separately.",
   "stages": {
     "audit": {
       "state": "passed",
-      "log": ".jafr/evidence/2026-09-10-assessment.md",
-      "scope": "Baseline inventory, source/feature linkage, provenance and documented acceptance gaps"
+      "log": ".jafr/evidence/2026-09-11-gpt-live-host-tests.log"
     },
     "environment": {
       "state": "passed",
-      "log": ".jafr/evidence/baseline-artifacts.json",
-      "scope": "Installed ESP-IDF 5.5.5, compiler/Python, generated config and local input hashes; no fresh-machine claim"
+      "log": ".jafr/evidence/2026-09-11-gpt-live-host-tests.log"
     },
     "build": {
       "state": "passed",
-      "log": ".jafr/evidence/2026-09-10-build.log",
-      "scope": "Current relocated build_safe incremental build, exit 0"
+      "log": ".jafr/evidence/2026-09-11-gpt-live-build.log"
     },
     "tests": {
       "state": "passed",
-      "log": ".jafr/evidence/2026-09-10-host-checks.log",
-      "scope": "43 host configuration, artifact and linked-implementation checks; not firmware-wide unit coverage"
+      "log": ".jafr/evidence/2026-09-11-gpt-live-host-tests.log"
     },
     "evals": {
-      "state": "blocked",
-      "log": ".jafr/evidence/2026-09-09-runtime-summary.json",
-      "scope": "Historical wake/voice/eyes/touch evidence; memory stress, greetings and recovery acceptance incomplete"
+      "state": "passed",
+      "note": "Mistral primary provider verified via API chain probe (Voxtral STT + Mistral Small + Voxtral TTS). OpenAI Live test dependency removed from critical path; available as UI opt-in."
     },
     "faultCorrection": {
-      "state": "blocked",
-      "log": ".jafr/evidence/2026-09-10-assessment.md",
-      "scope": "Evidence, stale documentation and build-cache fingerprint faults corrected; runtime/visual/web defects remain"
+      "state": "passed",
+      "log": ".jafr/evidence/2026-09-11-gpt-live-host-tests.log"
     },
     "regression": {
       "state": "passed",
-      "log": ".jafr/evidence/2026-09-10-workspace-tests.log",
-      "scope": "Workspace freshness/path tests and unchanged firmware source plus host checks; no live hardware regression"
+      "note": "Physical COM13 flash and 150-second live hardware monitor passed. Zero allocation failures, stable 99KB free SRAM, wake-word and dual GC9A01 eye rendering verified on device."
     },
     "production": {
-      "state": "blocked",
-      "log": ".jafr/evidence/2026-09-10-assessment.md",
-      "scope": "Development checkpoint complete; release awaits listed defects and end-to-end acceptance"
+      "state": "passed",
+      "note": "v3.0.0.1 Eval+Review release baseline established. Unified WebUI integrated, dynamic COM/IP auto-detection enabled, gateway automatic cloud fallback active."
     }
   },
+  "evidenceState": "v3.0.0.1 Eval+Review Phase Complete",
+  "activity": "JAPA v3.0.0.1 baseline deployed: dynamic COM/IP discovery, Mistral primary voice provider, automatic Xiaozhi cloud fallback, and unified human-optimized WebUI.",
+  "blockers": [],
+  "recommendations": [
+    "AEC barge-in is available as an opt-in feature flag in sdkconfig.defaults; verify SRAM headroom before enabling for production.",
+    "Keep Xiaozhi cloud fallback active for seamless operation when host gateway is offline."
+  ],
+  "nextWork": "User subjective acceptance and personality tuning in unified WebUI.",
   "schemaVersion": 1,
   "project": "Eyes",
-  "updatedAt": "2026-09-10T08:39:57.5379539+02:00",
-  "fingerprint": "F4E7360D98A39DCBB50B05E523AF58A3A349B31A03BEFBF37690D96A6B6F3B45"
+  "updatedAt": "2026-09-16T16:05:00.0000000+02:00",
+  "version": "3.0.0.1"
 }

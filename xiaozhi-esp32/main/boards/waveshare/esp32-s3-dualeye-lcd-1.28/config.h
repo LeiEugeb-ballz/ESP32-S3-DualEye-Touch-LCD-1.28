@@ -46,7 +46,7 @@
 #define DISPLAY2_RESET_PIN          GPIO_NUM_8
 #define DISPLAY2_BACKLIGHT_PIN      GPIO_NUM_39
 
-#define DISPLAY_SPI_SCLK_HZ         (40 * 1000 * 1000)
+#define DISPLAY_SPI_SCLK_HZ         (80 * 1000 * 1000)
 
 #define DISPLAY_WIDTH           240
 #define DISPLAY_HEIGHT          240

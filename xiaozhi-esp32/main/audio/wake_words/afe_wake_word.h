@@ -18,6 +18,7 @@
 
 #include "audio_codec.h"
 #include "wake_word.h"
+#include "audio_storage_allocator.h"
 
 class AfeWakeWord : public WakeWord {
 public:
@@ -50,7 +51,9 @@ private:
     TaskHandle_t wake_word_encode_task_ = nullptr;
     StaticTask_t* wake_word_encode_task_buffer_ = nullptr;
     StackType_t* wake_word_encode_task_stack_ = nullptr;
-    std::deque<std::vector<int16_t>> wake_word_pcm_;
+    using HistoryPcm = std::vector<int16_t, AudioStorageAllocator<int16_t>>;
+    static constexpr size_t kWakeWordHistoryFrames = 2000 / 30;
+    std::deque<HistoryPcm> wake_word_pcm_;
     std::deque<std::vector<uint8_t>> wake_word_opus_;
     std::mutex wake_word_mutex_;
     std::condition_variable wake_word_cv_;

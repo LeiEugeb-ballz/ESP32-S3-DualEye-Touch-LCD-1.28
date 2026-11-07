@@ -11,6 +11,7 @@ private:
 public:
     DummyAudioCodec(int input_sample_rate, int output_sample_rate);
     virtual ~DummyAudioCodec();
+    bool IsDummy() const override { return true; }
 };
 
 #endif // _DUMMY_AUDIO_CODEC_H

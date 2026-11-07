@@ -16105,7 +16105,9 @@ const EyeAssetConfig kDefaultEyeAsset = {
     .polar_map = kDefaultPolarMap,
     .upper_eyelid_map = kDefaultUpperEyelidMap,
     .lower_eyelid_map = kDefaultLowerEyelidMap,
-    .default_pupil_radius = 32
+    .default_pupil_radius = 32,
+    .aperture_half_width = 102,
+    .aperture_half_height = 60
 };
 
 } // namespace EyeRenderer

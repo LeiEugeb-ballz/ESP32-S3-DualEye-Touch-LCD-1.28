@@ -8,6 +8,20 @@
 
 class SystemInfo {
 public:
+    struct HeapStats {
+        size_t internal_free;
+        size_t internal_minimum;
+        size_t internal_largest;
+        size_t psram_free;
+        size_t psram_minimum;
+        size_t psram_largest;
+        uint32_t allocation_failures;
+        uint32_t last_failed_size;
+        uint32_t last_failed_caps;
+    };
+
+    static void InitializeHeapDiagnostics();
+    static HeapStats GetHeapStats();
     static size_t GetFlashSize();
     static size_t GetMinimumFreeHeapSize();
     static size_t GetFreeHeapSize();

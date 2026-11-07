@@ -47,6 +47,17 @@ static std::atomic<float> s_drag_dx_right{0.0f};
 static std::atomic<bool> s_dragging_right{false};
 static std::atomic<float> s_slide_offset_left{0.0f};
 static std::atomic<float> s_slide_offset_right{0.0f};
+static std::atomic<bool> s_sleeping{false};
+static std::atomic<bool> s_manual_gaze{false};
+static std::atomic<float> s_manual_gaze_x{0.0f};
+static std::atomic<float> s_manual_gaze_y{0.0f};
+static std::atomic<bool> s_manual_pupil{false};
+static std::atomic<float> s_manual_pupil_val{32.0f};
+static std::atomic<bool> s_trigger_blink{false};
+static std::atomic<float> s_live_fps{60.0f};
+static std::atomic<float> s_eye_scale{0.86f};
+static std::string s_current_mood = "idle";
+static std::mutex s_mood_mutex;
 static std::mutex s_chat_mutex;
 static std::string s_chat_role;
 static std::string s_chat_text;
@@ -106,7 +117,7 @@ static EyeBehaviorProfile GetEyeBehaviorProfile(EyeAnimationState state, bool sp
             return {8.0f, 5.0f, 900, 1600, 65, 70, 39.0f, 0.0f, 0.0f, 4200, 2600, 4, 1.1f, 0.8f};
         case EYE_STATE_IDLE:
         default:
-            return {24.0f, 18.0f, 700, 2100, 70, 80, 31.0f, 0.0f, 0.0f, 2500, 3200, 18, 1.4f, 1.0f};
+            return {24.0f, 18.0f, 400, 1600, 35, 35, 32.0f, 0.0f, 0.0f, 2200, 3000, 18, 1.4f, 1.0f};
     }
 }
 
@@ -258,49 +269,8 @@ static std::string SanitizeOverlayText(const std::string& input) {
 }
 
 static void DrawChatOverlay(uint16_t* buf, int chunk_y) {
-    if (chunk_y + 20 <= 204) return;
-
-    std::string role;
-    std::string text;
-    {
-        std::lock_guard<std::mutex> lock(s_chat_mutex);
-        uint32_t now_ms = (uint32_t)(esp_timer_get_time() / 1000ULL);
-        if (s_chat_text.empty() || now_ms > s_chat_until_ms) return;
-        role = s_chat_role;
-        text = s_chat_text;
-    }
-
-    std::string line;
-    if (role.find("user") != std::string::npos) {
-        line = "U: ";
-    } else if (role.find("assistant") != std::string::npos) {
-        line = "A: ";
-    }
-    line += SanitizeOverlayText(text);
-    if (line.size() > 28) {
-        line.resize(27);
-        line += ".";
-    }
-
-    const uint16_t bg = DmaRgb565(0x0000);
-    const uint16_t border = DmaRgb565(0x4208);
-    const uint16_t fg = DmaRgb565(role.find("user") != std::string::npos ? 0x07FF : 0xFFE0);
-
-    for (int py = 204; py < 236; ++py) {
-        if (py < chunk_y || py >= chunk_y + 20) continue;
-        uint16_t fill = (py == 204 || py == 235) ? border : bg;
-        int row = (py - chunk_y) * 240;
-        for (int px = 0; px < 240; ++px) {
-            buf[row + px] = fill;
-        }
-    }
-
-    int x = 8;
-    for (char ch : line) {
-        DrawGlyph3x5(buf, chunk_y, x, 213, ch, fg);
-        x += 8;
-        if (x > 232) break;
-    }
+    (void)buf;
+    (void)chunk_y;
 }
 
 void DisplayManager::SlideEyeIn(bool is_left, float start_offset_x) {
@@ -309,6 +279,86 @@ void DisplayManager::SlideEyeIn(bool is_left, float start_offset_x) {
     } else {
         s_slide_offset_right.store(start_offset_x, std::memory_order_relaxed);
     }
+}
+
+void DisplayManager::SetSleeping(bool sleeping) {
+    s_sleeping.store(sleeping, std::memory_order_relaxed);
+    ESP_LOGI(TAG, "DisplayManager sleeping mode set to: %d", sleeping ? 1 : 0);
+}
+
+bool DisplayManager::IsSleeping() {
+    return s_sleeping.load(std::memory_order_relaxed);
+}
+
+void DisplayManager::SetMood(const std::string& mood) {
+    {
+        std::lock_guard<std::mutex> lock(s_mood_mutex);
+        s_current_mood = mood;
+    }
+    std::string lower = mood;
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c) { return std::tolower(c); });
+    EyeAnimationState state = EYE_STATE_IDLE;
+    if (lower == "listening") state = EYE_STATE_LISTENING;
+    else if (lower == "thinking" || lower == "processing") state = EYE_STATE_THINKING;
+    else if (lower == "speaking") state = EYE_STATE_SPEAKING;
+    else if (lower == "happy") state = EYE_STATE_HAPPY;
+    else if (lower == "sleepy" || lower == "sad") state = EYE_STATE_SAD_SLEEPY;
+    else if (lower == "surprised") state = EYE_STATE_SURPRISED;
+    else if (lower == "angry" || lower == "error") state = EYE_STATE_ANGRY;
+
+    /* The renderer consumes current_state_. target_state_ is retained for the
+     * existing transition API, but writing it alone made ESP-NOW commands dead
+     * code: they parsed successfully and never changed the rendered behavior. */
+    target_state_.store(state, std::memory_order_release);
+    current_state_.store(state, std::memory_order_release);
+    ESP_LOGI(TAG, "External eye state: %s -> %d", lower.c_str(), static_cast<int>(state));
+}
+
+std::string DisplayManager::GetMood() {
+    std::lock_guard<std::mutex> lock(s_mood_mutex);
+    return s_current_mood;
+}
+
+void DisplayManager::SetManualGaze(float x, float y) {
+    s_manual_gaze_x.store(std::clamp(x, -30.0f, 30.0f), std::memory_order_relaxed);
+    s_manual_gaze_y.store(std::clamp(y, -25.0f, 25.0f), std::memory_order_relaxed);
+    s_manual_gaze.store(true, std::memory_order_release);
+}
+
+void DisplayManager::ClearManualGaze() {
+    s_manual_gaze.store(false, std::memory_order_release);
+}
+
+bool DisplayManager::IsManualGaze() {
+    return s_manual_gaze.load(std::memory_order_relaxed);
+}
+
+void DisplayManager::SetManualPupil(float dilation) {
+    s_manual_pupil_val.store(std::clamp(dilation, 18.0f, 44.0f), std::memory_order_relaxed);
+    s_manual_pupil.store(true, std::memory_order_release);
+}
+
+void DisplayManager::ClearManualPupil() {
+    s_manual_pupil.store(false, std::memory_order_release);
+}
+
+void DisplayManager::TriggerBlink() {
+    s_trigger_blink.store(true, std::memory_order_release);
+}
+
+float DisplayManager::GetFps() {
+    return s_live_fps.load(std::memory_order_relaxed);
+}
+
+void DisplayManager::SetEyeScale(float scale) {
+    if (scale < 0.2f) scale = 0.2f;
+    if (scale > 2.0f) scale = 2.0f;
+    s_eye_scale.store(scale, std::memory_order_relaxed);
+    ESP_LOGI(TAG, "Eye scale updated to %.2f", scale);
+}
+
+float DisplayManager::GetEyeScale() {
+    return s_eye_scale.load(std::memory_order_relaxed);
 }
 
 static void ProcessTouchInput(esp_lcd_touch_handle_t tp, TouchTracker& tracker, bool is_left, uint32_t now_ms) {
@@ -499,9 +549,9 @@ void DisplayManager::AddDisplay(SpiLcdDisplayExtended* display) {
     // Start dedicated rendering task once both displays are ready
     if (displays_.size() == 2 && !render_task_handle_) {
         render_task_running_ = true;
-        // Pinned to Core 1 at Priority 1 (lower than Opus at 2, Audio Out at 4, Audio In at 8)
-        xTaskCreatePinnedToCore(EyeRenderTask, "eye_render", 4096, nullptr, 1, &render_task_handle_, 1);
-        ESP_LOGI(TAG, "Direct DMA Eye Render Task started on Core 1 (Priority 1, cooperative pacing)");
+        // Pinned to Core 1 at Priority 5 (dedicated primary graphics pipeline)
+        xTaskCreatePinnedToCore(EyeRenderTask, "eye_render", 4096, nullptr, 5, &render_task_handle_, 1);
+        ESP_LOGI(TAG, "Direct DMA Eye Render Task started on Core 1 (Priority 5, dedicated graphics mode)");
     }
 }
 
@@ -528,9 +578,6 @@ const std::vector<SpiLcdDisplayExtended*>& DisplayManager::GetAllDisplays() {
 
 void DisplayManager::EyeRenderTask(void* arg) {
     ESP_LOGI(TAG, "EyeRenderTask entry - starting high-performance DMA rendering loop with Step 2 Lifelike Dynamics");
-
-    uint32_t render_started_ms = (uint32_t)(esp_timer_get_time() / 1000);
-    int last_startup_sweep_phase = -1;
 
     // Micro-saccadic tremor state
     float micro_tremor_x = 0.0f;
@@ -606,7 +653,17 @@ void DisplayManager::EyeRenderTask(void* arg) {
 
         uint32_t dt = now_ms - move_start_time_ms;
 
-        if (eye_in_motion) {
+        if (s_manual_gaze.load(std::memory_order_relaxed)) {
+            eye_in_motion = false;
+            float target_x = s_manual_gaze_x.load(std::memory_order_relaxed);
+            float target_y = s_manual_gaze_y.load(std::memory_order_relaxed);
+            current_gaze_x_ += (target_x - current_gaze_x_) * 0.45f;
+            current_gaze_y_ += (target_y - current_gaze_y_) * 0.45f;
+        } else if (s_sleeping.load(std::memory_order_relaxed)) {
+            eye_in_motion = false;
+            current_gaze_x_ += (0.0f - current_gaze_x_) * 0.2f;
+            current_gaze_y_ += (6.0f - current_gaze_y_) * 0.2f;
+        } else if (eye_in_motion) {
             if (dt >= move_duration_ms) {
                 eye_in_motion = false;
                 dwell_duration_ms = RandRangeMs(behavior.dwell_min_ms, behavior.dwell_span_ms);
@@ -651,11 +708,17 @@ void DisplayManager::EyeRenderTask(void* arg) {
         }
 
         // Smooth Pupil Accommodation + Speech Energy Reactivity
-        float audio_pulse = audio_energy * (speech_active ? 6.0f : 2.5f);
-        current_pupil_dilation_ += (target_pupil_dilation_ - current_pupil_dilation_) * 0.12f;
-        float effective_pupil = current_pupil_dilation_ + audio_pulse;
-        if (effective_pupil > 42.0f) effective_pupil = 42.0f;
-        if (effective_pupil < 20.0f) effective_pupil = 20.0f;
+        float effective_pupil = 32.0f;
+        if (s_manual_pupil.load(std::memory_order_relaxed)) {
+            effective_pupil = s_manual_pupil_val.load(std::memory_order_relaxed);
+            current_pupil_dilation_ = effective_pupil;
+        } else {
+            float audio_pulse = audio_energy * (speech_active ? 6.0f : 2.5f);
+            current_pupil_dilation_ += (target_pupil_dilation_ - current_pupil_dilation_) * 0.15f;
+            effective_pupil = current_pupil_dilation_ + audio_pulse;
+            if (effective_pupil > 44.0f) effective_pupil = 44.0f;
+            if (effective_pupil < 18.0f) effective_pupil = 18.0f;
+        }
 
         // 3. Anatomical Eyelid Pitch Tracking & Blinking (Authentic Bodmer Uncanny Eyes)
         int left_pid = s_applied_left_preset;
@@ -670,56 +733,59 @@ void DisplayManager::EyeRenderTask(void* arg) {
         float render_l_thresh = 0.0f;
 
         if (either_has_eyelids) {
-            // Resting posture creates the almond ocular socket from Bodmer's uncanny eyes (Photo 1 Cat, Photo 2 Human)
-            float target_u_thresh = 110.0f + (current_gaze_y_ * 2.2f);
-            float target_l_thresh = 45.0f - (current_gaze_y_ * 0.8f);
-            target_u_thresh += behavior.upper_lid_bias;
-            target_l_thresh += behavior.lower_lid_bias;
+            bool is_sleeping = s_sleeping.load(std::memory_order_relaxed);
+            float target_u_thresh = 0.0f;
+            float target_l_thresh = 0.0f;
 
-            // Owl Amber uses wide nocturnal aperture matching Photo 3
-            if (left_pid == EyeRenderer::PRESET_OWL || right_pid == EyeRenderer::PRESET_OWL) {
-                target_u_thresh = 20.0f;
-                target_l_thresh = 20.0f;
+            if (is_sleeping) {
+                target_u_thresh = 255.0f; // Eyelids closed in peaceful sleep
+                target_l_thresh = 255.0f;
+                blink_in_progress_ = false;
+            } else {
+                // Authentic Bodmer Uncanny Eyes resting aperture
+                target_u_thresh = 52.0f + (current_gaze_y_ * 1.5f);
+                target_l_thresh = 30.0f - (current_gaze_y_ * 0.8f);
+
+                // Emotion & Mood modulations
+                target_u_thresh += behavior.upper_lid_bias;
+                target_l_thresh += behavior.lower_lid_bias;
+
+                if (state == EYE_STATE_HAPPY) {
+                    target_l_thresh += 35.0f;
+                    target_u_thresh += 8.0f;
+                } else if (state == EYE_STATE_SAD_SLEEPY) {
+                    target_u_thresh += 50.0f;
+                    target_l_thresh += 20.0f;
+                } else if (state == EYE_STATE_SURPRISED) {
+                    target_u_thresh = 15.0f;
+                    target_l_thresh = 15.0f;
+                } else if (state == EYE_STATE_ANGRY) {
+                    target_u_thresh += 30.0f;
+                    target_l_thresh += 25.0f;
+                }
+
+                if (target_u_thresh < 10.0f) target_u_thresh = 10.0f;
+                if (target_u_thresh > 200.0f) target_u_thresh = 200.0f;
+                if (target_l_thresh < 10.0f) target_l_thresh = 10.0f;
+                if (target_l_thresh > 200.0f) target_l_thresh = 200.0f;
             }
 
-            // Emotion-specific Eyelid Modulations
-            if (state == EYE_STATE_LISTENING) {
-                target_u_thresh -= 16.0f; // Attentive wide gaze
-                target_l_thresh -= 8.0f;
-            } else if (state == EYE_STATE_THINKING) {
-                target_u_thresh += 12.0f; // Pensive squint
-            } else if (state == EYE_STATE_HAPPY) {
-                target_l_thresh += 65.0f; // Smiling Duchenne lower lid arch
-                target_u_thresh += 5.0f;
-            } else if (state == EYE_STATE_SAD_SLEEPY) {
-                target_u_thresh += 45.0f; // Drooping heavy eyelid
-            } else if (state == EYE_STATE_SURPRISED) {
-                target_u_thresh = 20.0f;  // Wide open surprise
-                target_l_thresh = 20.0f;
+            // Trigger manual blink if requested via UART or WebUI
+            if (s_trigger_blink.exchange(false)) {
+                blink_in_progress_ = true;
+                blink_start_time_ms_ = now_ms;
+                last_blink_time_ms_ = now_ms;
             }
-
-            if (speech_active) {
-                // Tiny lid movement follows TTS energy so speech feels embodied without
-                // becoming a crude mouth substitute.
-                target_u_thresh += audio_energy * 4.0f;
-                target_l_thresh += audio_energy * 10.0f;
-            }
-
-            // Clamp baseline thresholds to anatomically valid ranges
-            if (target_u_thresh < 20.0f) target_u_thresh = 20.0f;
-            if (target_u_thresh > 200.0f) target_u_thresh = 200.0f;
-            if (target_l_thresh < 20.0f) target_l_thresh = 20.0f;
-            if (target_l_thresh > 200.0f) target_l_thresh = 200.0f;
 
             // 4. Organic Asymmetric Blink Engine
-            if (!blink_in_progress_) {
+            if (!is_sleeping && !blink_in_progress_) {
                 if (now_ms - last_blink_time_ms_ >= next_blink_interval_ms_) {
                     blink_in_progress_ = true;
                     blink_start_time_ms_ = now_ms;
                     last_blink_time_ms_ = now_ms;
                     next_blink_interval_ms_ = RandRangeMs(behavior.blink_min_ms, behavior.blink_span_ms);
                     pending_double_blink_ = ((esp_random() % 100) < behavior.double_blink_chance);
-                } else if (pending_double_blink_ && (now_ms - last_blink_time_ms_ >= 260)) {
+                } else if (pending_double_blink_ && (now_ms - last_blink_time_ms_ >= 220)) {
                     blink_in_progress_ = true;
                     blink_start_time_ms_ = now_ms;
                     last_blink_time_ms_ = now_ms;
@@ -732,14 +798,14 @@ void DisplayManager::EyeRenderTask(void* arg) {
 
             if (blink_in_progress_) {
                 uint32_t elapsed = now_ms - blink_start_time_ms_;
-                const uint32_t close_dur = 40; // Fast 40ms closure
-                const uint32_t hold_dur = 20;  // 20ms seal
-                const uint32_t open_dur = 90;  // 90ms ease-back opening
+                const uint32_t close_dur = 35; // Fast 35ms snap closure
+                const uint32_t hold_dur = 15;  // 15ms seal
+                const uint32_t open_dur = 70;  // 70ms ease-back opening
                 const uint32_t total_dur = close_dur + hold_dur + open_dur;
 
                 if (elapsed < close_dur) {
                     float t = (float)elapsed / (float)close_dur;
-                    float ease_t = t * t; // Quadratic ease-in
+                    float ease_t = t * t;
                     render_u_thresh = target_u_thresh + (255.0f - target_u_thresh) * ease_t;
                     render_l_thresh = target_l_thresh + (255.0f - target_l_thresh) * ease_t;
                 } else if (elapsed < close_dur + hold_dur) {
@@ -748,7 +814,7 @@ void DisplayManager::EyeRenderTask(void* arg) {
                 } else if (elapsed < total_dur) {
                     float t = (float)(elapsed - close_dur - hold_dur) / (float)open_dur;
                     float inv_t = 1.0f - t;
-                    float ease_t = inv_t * inv_t; // Quadratic ease-out
+                    float ease_t = inv_t * inv_t;
                     render_u_thresh = target_u_thresh + (255.0f - target_u_thresh) * ease_t;
                     render_l_thresh = target_l_thresh + (255.0f - target_l_thresh) * ease_t;
                 } else {
@@ -756,9 +822,9 @@ void DisplayManager::EyeRenderTask(void* arg) {
                 }
             }
 
-            // Smooth threshold filtering to prevent scanline jitter
-            current_u_thresh += (render_u_thresh - current_u_thresh) * 0.35f;
-            current_l_thresh += (render_l_thresh - current_l_thresh) * 0.35f;
+            // Snappy, organic threshold filter (fast response, zero scanline lag)
+            current_u_thresh += (render_u_thresh - current_u_thresh) * 0.55f;
+            current_l_thresh += (render_l_thresh - current_l_thresh) * 0.55f;
         } else {
             current_u_thresh = 0.0f;
             current_l_thresh = 0.0f;
@@ -813,58 +879,12 @@ void DisplayManager::EyeRenderTask(void* arg) {
         params_left.lower_eyelid_threshold = left_has_eyelids ? (uint8_t)std::clamp((int)roundf(current_l_thresh), 0, 255) : 0;
         params_left.eyelid_color = 0x0000;
         params_left.enable_highlights = true;
+        params_left.scale = s_eye_scale.load(std::memory_order_relaxed);
 
         EyeRenderer::RenderParams params_right = params_left;
         params_right.gaze_x = (int16_t)roundf(gaze_x_r);
         params_right.upper_eyelid_threshold = right_has_eyelids ? (uint8_t)std::clamp((int)roundf(current_u_thresh), 0, 255) : 0;
         params_right.lower_eyelid_threshold = right_has_eyelids ? (uint8_t)std::clamp((int)roundf(current_l_thresh), 0, 255) : 0;
-
-        uint32_t startup_age_ms = now_ms - render_started_ms;
-        if (startup_age_ms < 5200) {
-            struct SweepPoint {
-                int16_t x;
-                int16_t y;
-                uint8_t pupil;
-            };
-            static constexpr uint16_t kColorWash[] = {
-                0xF800, // red
-                0x07E0, // green
-                0x001F, // blue
-                0xFFFF, // white
-                0x0000, // black
-            };
-            static constexpr SweepPoint kStartupSweep[] = {
-                {-30, 0, 26},
-                {30, 0, 38},
-                {0, -22, 28},
-                {0, 22, 40},
-                {0, 0, 32},
-            };
-            int phase = (int)(startup_age_ms / 1000);
-            if (phase < 0) phase = 0;
-            if (phase > 4) phase = 4;
-            const SweepPoint& sweep = kStartupSweep[phase];
-
-            params_left.gaze_x = sweep.x + 2;
-            params_right.gaze_x = sweep.x - 2;
-            params_left.gaze_y = sweep.y;
-            params_right.gaze_y = sweep.y;
-            params_left.pupil_dilation = sweep.pupil;
-            params_right.pupil_dilation = sweep.pupil;
-            params_left.upper_eyelid_threshold = 0;
-            params_left.lower_eyelid_threshold = 0;
-            params_right.upper_eyelid_threshold = 0;
-            params_right.lower_eyelid_threshold = 0;
-
-            if (phase != last_startup_sweep_phase) {
-                last_startup_sweep_phase = phase;
-                displays_[0]->FillColor(kColorWash[phase]);
-                displays_[1]->FillColor(kColorWash[phase]);
-                ESP_LOGI(TAG, "Startup LCD color+motion sweep phase %d: color=0x%04x gaze=(%d,%d) pupil=%u",
-                         phase, kColorWash[phase], sweep.x, sweep.y, sweep.pupil);
-                vTaskDelay(pdMS_TO_TICKS(180));
-            }
-        }
 
         // 6. Direct Hardware DMA Render Passes
         int64_t t0 = esp_timer_get_time();
@@ -883,8 +903,35 @@ void DisplayManager::EyeRenderTask(void* arg) {
                      current_gaze_x_, current_gaze_y_, effective_pupil);
         }
 
-        // Target ~50 FPS (20ms frame time) with explicit RTOS yield to guarantee audio priority
-        vTaskDelay(pdMS_TO_TICKS(18));
+        // Live FPS measurement
+        static int64_t s_fps_start_us = 0;
+        static uint32_t s_fps_frames = 0;
+        if (s_fps_start_us == 0) s_fps_start_us = t0;
+        s_fps_frames++;
+        if (s_fps_frames >= 60) {
+            int64_t now_us = esp_timer_get_time();
+            int64_t diff = now_us - s_fps_start_us;
+            if (diff > 0) {
+                s_live_fps.store((float)s_fps_frames * 1000000.0f / (float)diff, std::memory_order_relaxed);
+            }
+            s_fps_start_us = now_us;
+            s_fps_frames = 0;
+        }
+
+        // Target locked silky-smooth 60 FPS (~16.6ms per frame)
+        int64_t frame_spent_us = t2 - t0;
+        constexpr int64_t kTargetFrameUs = 16666;
+        if (frame_spent_us < kTargetFrameUs) {
+            uint32_t delay_ms = (uint32_t)((kTargetFrameUs - frame_spent_us) / 1000);
+            if (delay_ms > 0) {
+                TickType_t ticks = pdMS_TO_TICKS(delay_ms);
+                vTaskDelay(ticks > 0 ? ticks : 1);
+            } else {
+                taskYIELD();
+            }
+        } else {
+            taskYIELD();
+        }
     }
 
     vTaskDelete(nullptr);
@@ -1098,8 +1145,7 @@ SpiLcdDisplayExtended::SpiLcdDisplayExtended(
         }
     }
 
-    // Allocate one DMA chunk buffer in internal SRAM (zero wait-state L1).
-    // Transfers are waited on before reuse, so a second ping-pong buffer is not required.
+    // Allocate one DMA chunk buffer in internal SRAM.
     dma_buffer_ = (uint16_t*)heap_caps_malloc(kChunkBytes, MALLOC_CAP_DMA | MALLOC_CAP_INTERNAL);
 
     if (!dma_buffer_) {
@@ -1114,7 +1160,12 @@ SpiLcdDisplayExtended::SpiLcdDisplayExtended(
     if (dma_buffer_) {
         memset(dma_buffer_, 0, kChunkBytes);
         for (int y = 0; y < height_; y += kChunkLines) {
-            esp_err_t err = esp_lcd_panel_draw_bitmap(panel_, 0, y, width_, y + kChunkLines, dma_buffer_);
+            esp_err_t err = ESP_FAIL;
+            for (int retry = 0; retry < 20; ++retry) {
+                err = esp_lcd_panel_draw_bitmap(panel_, 0, y, width_, y + kChunkLines, dma_buffer_);
+                if (err == ESP_OK) break;
+                esp_rom_delay_us(500);
+            }
             if (err != ESP_OK) {
                 ESP_LOGE(TAG, "%s eye initial clear failed at y=%d: %s (%d)",
                          is_left_eye ? "Left" : "Right",
@@ -1183,7 +1234,12 @@ void SpiLcdDisplayExtended::FillColor(uint16_t rgb565_color) {
     }
 
     for (int y = 0; y < 240; y += kChunkLines) {
-        esp_err_t err = esp_lcd_panel_draw_bitmap(panel_, 0, y, 240, y + kChunkLines, dma_buffer_);
+        esp_err_t err = ESP_FAIL;
+        for (int retry = 0; retry < 20; ++retry) {
+            err = esp_lcd_panel_draw_bitmap(panel_, 0, y, 240, y + kChunkLines, dma_buffer_);
+            if (err == ESP_OK) break;
+            esp_rom_delay_us(500);
+        }
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "%s eye LCD fill failed at y=%d: %s (%d)",
                      is_left_eye_ ? "Left" : "Right",
@@ -1227,8 +1283,12 @@ void SpiLcdDisplayExtended::RenderEye(const EyeRenderer::RenderParams& params) {
     for (int y = 0; y < 240; y += kChunkLines) {
         uint16_t* active_buf = dma_buffer_;
         eye_renderer_.RenderChunk(active_buf, y, kChunkLines, params, is_left_eye_);
-        DrawChatOverlay(active_buf, y);
-        esp_err_t err = esp_lcd_panel_draw_bitmap(panel_, 0, y, 240, y + kChunkLines, active_buf);
+        esp_err_t err = ESP_FAIL;
+        for (int retry = 0; retry < 20; ++retry) {
+            err = esp_lcd_panel_draw_bitmap(panel_, 0, y, 240, y + kChunkLines, active_buf);
+            if (err == ESP_OK) break;
+            esp_rom_delay_us(500);
+        }
         if (err != ESP_OK) {
             draw_errors++;
             if (draw_errors <= 8 || (draw_errors % 120) == 0) {

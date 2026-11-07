@@ -1,6 +1,9 @@
 #Requires -Version 7.0
 [CmdletBinding()]
-param([ValidatePattern('^[A-Za-z0-9_-]+$')][string]$BuildDir = 'build_safe')
+param(
+    [ValidatePattern('^[A-Za-z0-9_-]+$')][string]$BuildDir = 'build_safe',
+    [ValidatePattern('^[A-Za-z0-9_-]+\.json$')][string]$EvidenceName = 'baseline-artifacts.json'
+)
 
 # Host-only acceptance checks: never open a serial port or invoke a flash action.
 $ErrorActionPreference = 'Stop'
@@ -92,5 +95,5 @@ $report = [ordered]@{
 }
 $evidence = Join-Path $project '.jafr/evidence'
 New-Item -ItemType Directory -Force $evidence | Out-Null
-$report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $evidence 'baseline-artifacts.json') -Encoding utf8
+$report | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath (Join-Path $evidence $EvidenceName) -Encoding utf8
 Write-Output "Finished: $((Get-Date).ToString('o')); $($checks.Count) host checks passed. Hardware acceptance is separate."
