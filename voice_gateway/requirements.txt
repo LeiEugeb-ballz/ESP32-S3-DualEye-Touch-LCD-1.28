@@ -1,0 +1,5 @@
+aiohttp==3.14.3
+mistralai==2.9.1
+av==16.1.0
+webrtcvad-wheels==2.0.14
+openai==3.13.0

@@ -1,5 +1,5 @@
 #include "wifi_board.h"
-#include "codecs/box_audio_codec.h"
+#include "codecs/dummy_audio_codec.h"
 #include "display/lcd_display.h"
 #include "system_reset.h"
 #include "application.h"
@@ -29,8 +29,10 @@
 #include "ota_server.h"
 #include "memory_manager.h"
 #include "bootstrap.h"
+#include "boot_control_server.h"
 #include "wifi_manager.h"
 #include "system_info.h"
+#include "esp_now_control.h"
 
 #define TAG "waveshare_s3_dualeye_lcd_1_28"
 
@@ -108,6 +110,11 @@ private:
 
     void InitializeTouch() {
         ESP_LOGI(TAG, "Initializing Touch Panels (CST816S)...");
+        gpio_set_direction(TOUCH1_INT_PIN, GPIO_MODE_INPUT);
+        gpio_set_pull_mode(TOUCH1_INT_PIN, GPIO_PULLUP_ONLY);
+        gpio_set_direction(TOUCH2_INT_PIN, GPIO_MODE_INPUT);
+        gpio_set_pull_mode(TOUCH2_INT_PIN, GPIO_PULLUP_ONLY);
+
         // 1. Touch 1 (Left Screen) on i2c_bus_ (I2C0)
         esp_lcd_panel_io_handle_t tp1_io_handle = nullptr;
         esp_lcd_panel_io_i2c_config_t tp1_io_config = {};
@@ -210,7 +217,9 @@ private:
         io_config.dc_gpio_num = DISPLAY_DC_PIN;
         io_config.spi_mode = DISPLAY_SPI_MODE;
         io_config.pclk_hz = DISPLAY_SPI_SCLK_HZ;
-        io_config.trans_queue_depth = 10;
+        // One in-flight transaction prevents the two panel IO handles sharing
+        // SPI2 from building an unbounded backlog and blocking the eye task.
+        io_config.trans_queue_depth = 1;
         io_config.lcd_cmd_bits = 8;
         io_config.lcd_param_bits = 8;
         ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)SPI2_HOST, &io_config, &panel_io));
@@ -222,7 +231,7 @@ private:
         panel_config.rgb_ele_order = DISPLAY_RGB_ORDER;
         panel_config.bits_per_pixel = 16;
         ESP_ERROR_CHECK(esp_lcd_new_panel_gc9a01(panel_io, &panel_config, &panel));    
-        
+
         esp_lcd_panel_reset(panel);
         esp_lcd_panel_init(panel);
         esp_lcd_panel_invert_color(panel, DISPLAY_INVERT_COLOR);
@@ -245,7 +254,9 @@ private:
         io_config.dc_gpio_num = DISPLAY_DC_PIN;
         io_config.spi_mode = DISPLAY_SPI_MODE;
         io_config.pclk_hz = DISPLAY_SPI_SCLK_HZ;
-        io_config.trans_queue_depth = 10;
+        // One in-flight transaction prevents the two panel IO handles sharing
+        // SPI2 from building an unbounded backlog and blocking the eye task.
+        io_config.trans_queue_depth = 1;
         io_config.lcd_cmd_bits = 8;
         io_config.lcd_param_bits = 8;
         ESP_ERROR_CHECK(esp_lcd_new_panel_io_spi((esp_lcd_spi_bus_handle_t)SPI2_HOST, &io_config, &panel_io));
@@ -273,17 +284,30 @@ private:
     void InitializeButtons() {
         boot_button_.OnClick([this]() {
             auto& app = Application::GetInstance();
-            if (app.GetDeviceState() == kDeviceStateStarting) {
+            auto state = app.GetDeviceState();
+            if (state == kDeviceStateStarting) {
                 EnterWifiConfigMode();
+                return;
+            }
+            if (state == kDeviceStateWifiConfiguring) {
+                // While in AP/Config mode, single click cycles eye presets immediately!
+                ESP_LOGI(TAG, "BOOT button click in Config Mode -> Cycling Eye Preset");
+                DisplayManager::CycleEyePreset();
                 return;
             }
             app.ToggleChatState();
         });
 
-        // Double-click BOOT button to cycle between photorealistic eye styles
+        // Double-click BOOT button anytime to cycle between photorealistic eye styles
         boot_button_.OnDoubleClick([this]() {
             ESP_LOGI(TAG, "BOOT button double-click -> Cycling Eye Preset");
             DisplayManager::CycleEyePreset();
+        });
+
+        // Long-press BOOT button anytime to force entry into WiFi config mode
+        boot_button_.OnLongPress([this]() {
+            ESP_LOGI(TAG, "BOOT button long-press -> Entering WiFi Config Mode");
+            EnterWifiConfigMode();
         });
     }
 
@@ -430,35 +454,63 @@ public:
 
         // Run System Bootstrap & Awareness Initialization
         Bootstrap::Initialize();
+    }
 
-        // Start Direct TCP Push OTA Server on Port 3232
+    virtual void StartNetwork() override {
+        WifiBoard::StartNetwork();
+
+        // Start network-facing services only after the Wi-Fi stack has been
+        // initialized by WifiBoard::StartNetwork(). Starting socket servers in
+        // the board constructor can hit lwIP before tcpip_init has created its
+        // mailbox, which causes a boot-looping assertion on hardware.
         OtaPushServer::StartServer(3232);
+        BootControlServer::StartServer(3233);
+        
+        // Pivot graphics commands to ESP-NOW (Diagnostics mode)
+        DualEyeEspNow::Initialize();
     }
 
     virtual std::string GetBoardJson() override {
         auto& wifi = WifiManager::GetInstance();
-        std::string json = R"({"type":")" + std::string(BOARD_TYPE) + R"(",)";
-        json += R"("name":"Waveshare ESP32-S3 DualEye LCD 1.28",)";
-        json += R"("eyes":{"active_preset":"japanese","presets_count":11,"renderer":"DMA Ping-Pong 50FPS"},)";
-        json += R"("soul_and_memory":{"storage":"NVS Flash","notes_support":true,"soul_memory_support":true},)";
-        json += R"("ota_server":{"status":"active","port":3232,"mode":"TCP Push OTA"},)";
-
+        auto* root = cJSON_CreateObject();
+        cJSON_AddStringToObject(root, "type", BOARD_TYPE);
+        cJSON_AddStringToObject(root, "name", "JAPA / Waveshare ESP32-S3 DualEye LCD 1.28");
+        auto* eyes = cJSON_AddObjectToObject(root, "eyes");
+        const auto left = EyeRenderer::GetEyePreset(static_cast<EyeRenderer::EyePresetId>(DisplayManager::GetLeftPresetId()));
+        const auto right = EyeRenderer::GetEyePreset(static_cast<EyeRenderer::EyePresetId>(DisplayManager::GetRightPresetId()));
+        cJSON_AddStringToObject(eyes, "left_preset", left ? left->name : "unknown");
+        cJSON_AddStringToObject(eyes, "right_preset", right ? right->name : "unknown");
+        cJSON_AddNumberToObject(eyes, "presets_count", EyeRenderer::PRESET_COUNT);
+        cJSON_AddStringToObject(eyes, "renderer", "Uncanny direct SPI / DMA chunks");
+        uint32_t eye_us = 0, both_us = 0;
+        DisplayManager::GetBenchmarkMetrics(eye_us, both_us);
+        cJSON_AddNumberToObject(eyes, "last_both_render_us", both_us);
+        auto* ota = cJSON_AddObjectToObject(root, "ota_server");
+        cJSON_AddNumberToObject(ota, "configured_port", 3232);
+        cJSON_AddStringToObject(ota, "mode", "TCP push; availability must be checked");
+        auto* control = cJSON_AddObjectToObject(root, "boot_control");
+        cJSON_AddNumberToObject(control, "configured_port", 3233);
+        cJSON_AddStringToObject(control, "status_path", "/boot/status");
+        cJSON_AddBoolToObject(root, "wifi_config_mode", wifi.IsConfigMode());
         if (!wifi.IsConfigMode()) {
-            json += R"("ssid":")" + wifi.GetSsid() + R"(",)";
-            json += R"("rssi":)" + std::to_string(wifi.GetRssi()) + R"(,)";
-            json += R"("channel":)" + std::to_string(wifi.GetChannel()) + R"(,)";
-            json += R"("ip":")" + wifi.GetIpAddress() + R"(",)";
+            cJSON_AddStringToObject(root, "ssid", wifi.GetSsid().c_str());
+            cJSON_AddNumberToObject(root, "rssi", wifi.GetRssi());
+            cJSON_AddNumberToObject(root, "channel", wifi.GetChannel());
+            cJSON_AddStringToObject(root, "ip", wifi.GetIpAddress().c_str());
         }
-
-        json += R"("mac":")" + SystemInfo::GetMacAddress() + R"("})";
+        cJSON_AddStringToObject(root, "mac", SystemInfo::GetMacAddress().c_str());
+        char* data = cJSON_PrintUnformatted(root);
+        std::string json = data ? data : "{}";
+        cJSON_free(data);
+        cJSON_Delete(root);
         return json;
     }
 
     virtual AudioCodec* GetAudioCodec() override {
-        static BoxAudioCodec audio_codec(i2c_bus_, AUDIO_INPUT_SAMPLE_RATE, AUDIO_OUTPUT_SAMPLE_RATE,
-            AUDIO_I2S_GPIO_MCLK, AUDIO_I2S_GPIO_BCLK, AUDIO_I2S_GPIO_WS, AUDIO_I2S_GPIO_DOUT, AUDIO_I2S_GPIO_DIN, AUDIO_CODEC_PA_PIN, AUDIO_CODEC_ES8311_ADDR, AUDIO_CODEC_ES7210_ADDR, AUDIO_INPUT_REFERENCE);
-            return &audio_codec;
+        static DummyAudioCodec audio_codec(16000, 16000);
+        return &audio_codec;
     }
+
     virtual Display* GetDisplay() override {
         return &display_manager_;
     }

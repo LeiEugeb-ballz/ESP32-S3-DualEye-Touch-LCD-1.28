@@ -2,6 +2,9 @@ tmp/
 components/
 managed_components/
 build/
+build_codex/
+build_safe/
+build_safe*/
 dist/
 .vscode/
 .devcontainer/
@@ -16,5 +19,6 @@ main/mmap_generate_emoji.h
 .cache
 *.pyc
 *.bin
-.clangd
-checkpoints/
+checkpoints/*
+!checkpoints/*.md
+!checkpoints/*.py

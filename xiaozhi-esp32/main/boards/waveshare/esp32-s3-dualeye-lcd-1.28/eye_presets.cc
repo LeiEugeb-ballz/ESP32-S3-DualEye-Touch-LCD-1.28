@@ -2045,13 +2045,13 @@ const EyeAssetConfig kCatEyeAsset = {
     .sclera_width = 180,
     .sclera_height = 180,
     .sclera_map = kCatScleraMap,
-    .iris_width = 128,
-    .iris_height = 128,
+    .iris_width = 1,
+    .iris_height = 16,
     .iris_map = kCatIrisMap,
     .polar_map = kDefaultPolarMap,
     .upper_eyelid_map = kDefaultUpperEyelidMap,
     .lower_eyelid_map = kDefaultLowerEyelidMap,
-    .default_pupil_radius = 18
+    .default_pupil_radius = 20
 };
 
 static const uint16_t kDragonScleraMap[25600] = {
@@ -6227,13 +6227,13 @@ const EyeAssetConfig kDragonEyeAsset = {
     .sclera_width = 160,
     .sclera_height = 160,
     .sclera_map = kDragonScleraMap,
-    .iris_width = 160,
-    .iris_height = 160,
+    .iris_width = 512,
+    .iris_height = 80,
     .iris_map = kDragonIrisMap,
     .polar_map = kDefaultPolarMap,
     .upper_eyelid_map = kDefaultUpperEyelidMap,
     .lower_eyelid_map = kDefaultLowerEyelidMap,
-    .default_pupil_radius = 90
+    .default_pupil_radius = 28
 };
 
 static const uint16_t kTerminatorScleraMap[40000] = {
@@ -9773,13 +9773,13 @@ const EyeAssetConfig kTerminatorEyeAsset = {
     .sclera_width = 200,
     .sclera_height = 200,
     .sclera_map = kTerminatorScleraMap,
-    .iris_width = 80,
-    .iris_height = 80,
+    .iris_width = 256,
+    .iris_height = 64,
     .iris_map = kTerminatorIrisMap,
     .polar_map = kDefaultPolarMap,
     .upper_eyelid_map = kDefaultUpperEyelidMap,
     .lower_eyelid_map = kDefaultLowerEyelidMap,
-    .default_pupil_radius = 65
+    .default_pupil_radius = 28
 };
 
 static const uint16_t kDoeScleraMap[32400] = {
@@ -12844,13 +12844,13 @@ const EyeAssetConfig kDoeEyeAsset = {
     .sclera_width = 180,
     .sclera_height = 180,
     .sclera_map = kDoeScleraMap,
-    .iris_width = 180,
-    .iris_height = 180,
+    .iris_width = 256,
+    .iris_height = 64,
     .iris_map = kDoeIrisMap,
     .polar_map = kDefaultPolarMap,
     .upper_eyelid_map = kDefaultUpperEyelidMap,
     .lower_eyelid_map = kDefaultLowerEyelidMap,
-    .default_pupil_radius = 80
+    .default_pupil_radius = 32
 };
 
 static const uint16_t kOwlScleraMap[32400] = {
@@ -14892,13 +14892,13 @@ const EyeAssetConfig kOwlEyeAsset = {
     .sclera_width = 180,
     .sclera_height = 180,
     .sclera_map = kOwlScleraMap,
-    .iris_width = 80,
-    .iris_height = 80,
+    .iris_width = 1,
+    .iris_height = 16,
     .iris_map = kOwlIrisMap,
     .polar_map = kDefaultPolarMap,
     .upper_eyelid_map = kDefaultUpperEyelidMap,
     .lower_eyelid_map = kDefaultLowerEyelidMap,
-    .default_pupil_radius = 20
+    .default_pupil_radius = 22
 };
 
 static const uint16_t kGoatScleraMap[16384] = {
@@ -17546,13 +17546,13 @@ const EyeAssetConfig kGoatEyeAsset = {
     .sclera_width = 128,
     .sclera_height = 128,
     .sclera_map = kGoatScleraMap,
-    .iris_width = 128,
-    .iris_height = 128,
+    .iris_width = 402,
+    .iris_height = 64,
     .iris_map = kGoatIrisMap,
     .polar_map = kDefaultPolarMap,
     .upper_eyelid_map = kDefaultUpperEyelidMap,
     .lower_eyelid_map = kDefaultLowerEyelidMap,
-    .default_pupil_radius = 32
+    .default_pupil_radius = 26
 };
 
 static const uint16_t kNaugaScleraMap[32400] = {
@@ -19594,13 +19594,13 @@ const EyeAssetConfig kNaugaEyeAsset = {
     .sclera_width = 180,
     .sclera_height = 180,
     .sclera_map = kNaugaScleraMap,
-    .iris_width = 80,
-    .iris_height = 80,
+    .iris_width = 1,
+    .iris_height = 16,
     .iris_map = kNaugaIrisMap,
     .polar_map = kDefaultPolarMap,
     .upper_eyelid_map = kDefaultUpperEyelidMap,
     .lower_eyelid_map = kDefaultLowerEyelidMap,
-    .default_pupil_radius = 20
+    .default_pupil_radius = 24
 };
 
 static const uint16_t kNewtScleraMap[40000] = {
@@ -23140,13 +23140,13 @@ const EyeAssetConfig kNewtEyeAsset = {
     .sclera_width = 200,
     .sclera_height = 200,
     .sclera_map = kNewtScleraMap,
-    .iris_width = 80,
-    .iris_height = 80,
+    .iris_width = 256,
+    .iris_height = 64,
     .iris_map = kNewtIrisMap,
     .polar_map = kDefaultPolarMap,
     .upper_eyelid_map = kDefaultUpperEyelidMap,
     .lower_eyelid_map = kDefaultLowerEyelidMap,
-    .default_pupil_radius = 180
+    .default_pupil_radius = 30
 };
 
 static const uint16_t kNoScleraScleraMap[25600] = {
@@ -27322,13 +27322,13 @@ const EyeAssetConfig kNoScleraEyeAsset = {
     .sclera_width = 160,
     .sclera_height = 160,
     .sclera_map = kNoScleraScleraMap,
-    .iris_width = 160,
-    .iris_height = 160,
+    .iris_width = 512,
+    .iris_height = 80,
     .iris_map = kNoScleraIrisMap,
     .polar_map = kDefaultPolarMap,
     .upper_eyelid_map = kDefaultUpperEyelidMap,
     .lower_eyelid_map = kDefaultLowerEyelidMap,
-    .default_pupil_radius = 120
+    .default_pupil_radius = 32
 };
 
 

@@ -27,6 +27,34 @@ void Initialize() {
 // ---------------------------------------------------------------------------
 // File / Notes System
 // ---------------------------------------------------------------------------
+static std::string GetKeyForTitle(const std::string& title) {
+    if (title.length() <= 15) {
+        return title;
+    }
+    uint32_t hash = 2166136261u;
+    for (char c : title) {
+        hash ^= (uint8_t)c;
+        hash *= 16777619u;
+    }
+    char buf[16];
+    snprintf(buf, sizeof(buf), "k_%08x", (unsigned int)hash);
+    return std::string(buf);
+}
+
+static std::string GetKeyForTrait(const std::string& key) {
+    if (key.length() <= 15) {
+        return key;
+    }
+    uint32_t hash = 2166136261u;
+    for (char c : key) {
+        hash ^= (uint8_t)c;
+        hash *= 16777619u;
+    }
+    char buf[16];
+    snprintf(buf, sizeof(buf), "t_%08x", (unsigned int)hash);
+    return std::string(buf);
+}
+
 static std::vector<std::string> GetNotesListInternal() {
     Settings notes_set("notes_idx", false);
     std::string index_str = notes_set.GetString("index", "");
@@ -58,7 +86,7 @@ bool WriteNote(const std::string& title, const std::string& content) {
     std::lock_guard<std::mutex> lock(s_mem_mutex);
 
     Settings notes_doc("notes_data", true);
-    notes_doc.SetString(title, content);
+    notes_doc.SetString(GetKeyForTitle(title), content);
 
     auto list = GetNotesListInternal();
     if (std::find(list.begin(), list.end(), title) == list.end()) {
@@ -74,7 +102,7 @@ std::string ReadNote(const std::string& title) {
     std::lock_guard<std::mutex> lock(s_mem_mutex);
 
     Settings notes_doc("notes_data", false);
-    return notes_doc.GetString(title, "");
+    return notes_doc.GetString(GetKeyForTitle(title), "");
 }
 
 std::vector<std::string> ListNotes() {
@@ -87,7 +115,7 @@ bool DeleteNote(const std::string& title) {
     std::lock_guard<std::mutex> lock(s_mem_mutex);
 
     Settings notes_doc("notes_data", true);
-    notes_doc.EraseKey(title);
+    notes_doc.EraseKey(GetKeyForTitle(title));
 
     auto list = GetNotesListInternal();
     auto it = std::find(list.begin(), list.end(), title);
@@ -106,7 +134,7 @@ std::string GetNotesSummaryJson() {
     for (const auto& item : list) {
         cJSON* obj = cJSON_CreateObject();
         cJSON_AddStringToObject(obj, "title", item.c_str());
-        std::string preview = notes_doc.GetString(item, "");
+        std::string preview = notes_doc.GetString(GetKeyForTitle(item), "");
         if (preview.length() > 60) preview = preview.substr(0, 57) + "...";
         cJSON_AddStringToObject(obj, "preview", preview.c_str());
         cJSON_AddItemToArray(root, obj);
@@ -148,7 +176,7 @@ bool SaveTrait(const std::string& key, const std::string& value) {
     std::lock_guard<std::mutex> lock(s_mem_mutex);
 
     Settings traits("persona", true);
-    traits.SetString(key, value);
+    traits.SetString(GetKeyForTrait(key), value);
 
     Settings trait_idx("trait_idx", true);
     std::string idx = trait_idx.GetString("index", "");
@@ -177,7 +205,7 @@ std::string ReadTrait(const std::string& key) {
     if (key.empty()) return "";
     std::lock_guard<std::mutex> lock(s_mem_mutex);
     Settings traits("persona", false);
-    return traits.GetString(key, "");
+    return traits.GetString(GetKeyForTrait(key), "");
 }
 
 std::string GetAllTraitsJson() {
@@ -193,7 +221,7 @@ std::string GetAllTraitsJson() {
         Settings traits("persona", false);
         while (std::getline(ss, item, '|')) {
             if (!item.empty()) {
-                std::string val = traits.GetString(item, "");
+                std::string val = traits.GetString(GetKeyForTrait(item), "");
                 cJSON_AddStringToObject(root, item.c_str(), val.c_str());
             }
         }

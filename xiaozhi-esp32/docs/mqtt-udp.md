@@ -174,6 +174,7 @@ Semantics match the WebSocket protocol. Supported types:
 - **MCP** - IoT control.
 - **System** - system control, e.g. `"command": "reboot"`.
 - **Alert** - show an alert on the UI; fields: `status`, `message`, `emotion`.
+- **Speak Request** - server-initiated speaking flow. When the idle device receives `{"type":"speak_request","session_id":"...","text":"..."}`, it opens the normal UDP audio channel, sends NAT activation packets, switches to `speaking`, and replies with `{"type":"speak_ready","state":"ready"}` so the server can stream TTS audio.
 - **Goodbye** - server-initiated shutdown of the audio session. The device responds by closing the UDP channel without sending its own goodbye.
 - **Custom** (optional, enabled via `CONFIG_RECEIVE_CUSTOM_MESSAGE`).
 
@@ -185,6 +186,26 @@ Example alert:
   "status": "Warning",
   "message": "Battery low",
   "emotion": "sad"
+}
+```
+
+Example server-initiated greeting request:
+
+```json
+{
+  "session_id": "xxx",
+  "type": "speak_request",
+  "text": "Give one short casual random greeting."
+}
+```
+
+Expected device response after the UDP channel is ready:
+
+```json
+{
+  "session_id": "xxx",
+  "type": "speak_ready",
+  "state": "ready"
 }
 ```
 

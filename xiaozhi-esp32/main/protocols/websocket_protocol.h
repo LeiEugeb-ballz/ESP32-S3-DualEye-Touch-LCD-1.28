@@ -13,6 +13,7 @@
 class WebsocketProtocol : public Protocol {
 public:
     WebsocketProtocol();
+    WebsocketProtocol(const std::string& url, const std::string& token);
     ~WebsocketProtocol();
 
     bool Start() override;
@@ -20,11 +21,15 @@ public:
     bool OpenAudioChannel() override;
     void CloseAudioChannel(bool send_goodbye = true) override;
     bool IsAudioChannelOpened() const override;
+    bool IsGatewayReady() const { return gateway_ready_; }
 
 private:
     EventGroupHandle_t event_group_handle_;
     std::unique_ptr<WebSocket> websocket_;
     int version_ = 1;
+    std::string override_url_;
+    std::string override_token_;
+    bool gateway_ready_ = false;
 
     void ParseServerHello(const cJSON* root);
     bool SendText(const std::string& text) override;

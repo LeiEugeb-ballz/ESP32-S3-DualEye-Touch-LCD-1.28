@@ -78,8 +78,8 @@ void Initialize() {
         MemoryManager::SaveTrait("creator_bond", "Devoted to pair-programming, creative collaboration, and lifelong companionship.");
 
         // 2. Seed System Bootstrap and Readme Notes on Flash
-        MemoryManager::WriteNote("system.bootstrap", kSystemManifest);
-        MemoryManager::WriteNote("README_COMPANION.txt", kCompanionReadme);
+        MemoryManager::WriteNote("sys_manifest", kSystemManifest);
+        MemoryManager::WriteNote("readme.txt", kCompanionReadme);
 
         // Update version marker
         boot_set.SetInt("ver", BOOTSTRAP_VERSION);

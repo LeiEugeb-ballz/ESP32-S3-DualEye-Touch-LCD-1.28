@@ -78,8 +78,9 @@ bool DeviceStateMachine::IsValidTransition(DeviceState from, DeviceState to) con
                    to == kDeviceStateWifiConfiguring;
 
         case kDeviceStateConnecting:
-            // Can go to idle (failed) or listening (success)
+            // Can go to idle (failed), listening (normal wake success), or speaking (server-initiated speak_request)
             return to == kDeviceStateIdle ||
+                   to == kDeviceStateSpeaking ||
                    to == kDeviceStateListening;
 
         case kDeviceStateListening:

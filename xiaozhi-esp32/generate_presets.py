@@ -2,7 +2,8 @@ import os
 import re
 
 SOURCE_DIR = r"C:\Users\txr45\Downloads\TFT_eSPI-2.5.43\TFT_eSPI-2.5.43\examples\Generic\Animated_Eyes_2\data"
-OUT_DIR = r"C:\Users\txr45\Documents\Eyes\ESP32-S3-DualEye-Touch-LCD-1.28\xiaozhi-esp32\main\boards\waveshare\esp32-s3-dualeye-lcd-1.28"
+PROJECT_ROOT = os.path.abspath(os.path.dirname(__file__))
+OUT_DIR = os.path.join(PROJECT_ROOT, "main", "boards", "waveshare", "esp32-s3-dualeye-lcd-1.28")
 
 def parse_header(filepath):
     with open(filepath, 'r', errors='ignore') as f:
@@ -114,13 +115,14 @@ for key, fname, display_name in presets_info:
     
     s_w = defs.get("SCLERA_WIDTH", 200)
     s_h = defs.get("SCLERA_HEIGHT", 200)
-    i_w = defs.get("IRIS_WIDTH", defs.get("IRIS_MAP_WIDTH", 256))
-    i_h = defs.get("IRIS_HEIGHT", defs.get("IRIS_MAP_HEIGHT", 64))
+    i_w = defs.get("IRIS_MAP_WIDTH", defs.get("IRIS_WIDTH", 256))
+    i_h = defs.get("IRIS_MAP_HEIGHT", defs.get("IRIS_HEIGHT", 64))
     
     if key == "Japanese":
         p_r = 38
     else:
-        p_r = defs.get("IRIS_MIN", 32)
+        raw_min = defs.get("IRIS_MIN", 32)
+        p_r = raw_min if raw_min <= 45 else 30
     
     print(f"Writing {key}: sclera {s_w}x{s_h} ({len(sclera)}), iris {i_w}x{i_h} ({len(iris)})")
     

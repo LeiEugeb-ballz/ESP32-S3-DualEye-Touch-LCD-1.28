@@ -7,6 +7,7 @@
 #include <esp_lcd_panel_ops.h>
 #include <esp_lcd_touch.h>
 #include <freertos/FreeRTOS.h>
+#include <freertos/semphr.h>
 #include <freertos/task.h>
 #include <vector>
 #include <string>
@@ -117,8 +118,26 @@ public:
     static int GetRightPresetId();
     static int GetCurrentPresetId();
 
-    // Capacitive Touch Integration
+    // Capacitive Touch Integration & Transitions
     static void SetTouchHandles(esp_lcd_touch_handle_t tp1, esp_lcd_touch_handle_t tp2);
+    static void SlideEyeIn(bool is_left, float start_offset_x);
+
+    // Sleep / Eyelids Mode
+    static void SetSleeping(bool sleeping);
+    static bool IsSleeping();
+
+    // Persona, Mood & Direct Gaze Controls (for UART & WebUI)
+    static void SetMood(const std::string& mood);
+    static std::string GetMood();
+    static void SetManualGaze(float x, float y);
+    static void ClearManualGaze();
+    static bool IsManualGaze();
+    static void SetManualPupil(float dilation);
+    static void ClearManualPupil();
+    static void TriggerBlink();
+    static float GetFps();
+    static void SetEyeScale(float scale);
+    static float GetEyeScale();
 };
 
 // Single eye display instance representing one physical screen surface
@@ -129,11 +148,20 @@ private:
     bool is_left_eye_ = true;
     EyeRenderer::UncannyEyeRenderer eye_renderer_;
 
-    // Internal SRAM DMA ping-pong buffers
+    // Internal SRAM DMA chunk buffer
+    // Keep each SPI frame slice large enough to avoid queue starvation while
+    // retaining a small internal DMA footprint. The panel IO is configured
+    // with a single in-flight transaction, so RenderEye advances slices only
+    // after the previous transfer has completed.
     static constexpr int kChunkLines = 20;
     static constexpr size_t kChunkBytes = 240 * kChunkLines * sizeof(uint16_t);
-    uint16_t* dma_buffer_[2] = {nullptr, nullptr};
-    uint8_t current_dma_buf_ = 0;
+    uint16_t* dma_buffer_ = nullptr;
+    SemaphoreHandle_t color_done_sem_ = nullptr;
+
+    static bool OnColorTransferDone(esp_lcd_panel_io_handle_t panel_io,
+                                    esp_lcd_panel_io_event_data_t* edata,
+                                    void* user_ctx);
+    bool WaitForColorTransfer(int y);
 
 public:
     SpiLcdDisplayExtended(esp_lcd_panel_io_handle_t panel_io,
@@ -155,6 +183,7 @@ public:
 
     // High-performance slice-by-slice DMA render pass
     void RenderEye(const EyeRenderer::RenderParams& params);
+    void FillColor(uint16_t rgb565_color);
 
     bool IsLeftEye() const { return is_left_eye_; }
     esp_lcd_panel_handle_t GetPanel() const { return panel_; }

@@ -9,11 +9,52 @@
 #include <esp_app_desc.h>
 #include <esp_ota_ops.h>
 #include <esp_pm.h>
+#include <esp_heap_caps.h>
+#include <esp_rom_sys.h>
+#include <atomic>
 #if CONFIG_IDF_TARGET_ESP32P4
 #include "esp_wifi_remote.h"
 #endif
 
 #define TAG "SystemInfo"
+
+namespace {
+std::atomic<uint32_t> allocation_failures{0};
+std::atomic<uint32_t> last_failed_size{0};
+std::atomic<uint32_t> last_failed_caps{0};
+
+void RecordAllocationFailure(size_t size, uint32_t caps, const char* function) {
+    allocation_failures.fetch_add(1, std::memory_order_relaxed);
+    last_failed_size.store(size, std::memory_order_relaxed);
+    last_failed_caps.store(caps, std::memory_order_relaxed);
+    // ROM output does not need a heap allocation in an already exhausted heap.
+    esp_rom_printf("HEAP_ALLOC_FAILED bytes=%u caps=0x%x function=%s\n",
+                   static_cast<unsigned>(size), static_cast<unsigned>(caps), function);
+}
+}
+
+void SystemInfo::InitializeHeapDiagnostics() {
+    static const esp_err_t result = heap_caps_register_failed_alloc_callback(RecordAllocationFailure);
+    if (result != ESP_OK) {
+        ESP_LOGE(TAG, "Allocation diagnostics registration failed: %s", esp_err_to_name(result));
+    }
+}
+
+SystemInfo::HeapStats SystemInfo::GetHeapStats() {
+    constexpr uint32_t internal = MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT;
+    constexpr uint32_t psram = MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT;
+    return {
+        heap_caps_get_free_size(internal),
+        heap_caps_get_minimum_free_size(internal),
+        heap_caps_get_largest_free_block(internal),
+        heap_caps_get_free_size(psram),
+        heap_caps_get_minimum_free_size(psram),
+        heap_caps_get_largest_free_block(psram),
+        allocation_failures.load(std::memory_order_relaxed),
+        last_failed_size.load(std::memory_order_relaxed),
+        last_failed_caps.load(std::memory_order_relaxed),
+    };
+}
 
 size_t SystemInfo::GetFlashSize() {
     uint32_t flash_size;
@@ -146,9 +187,14 @@ void SystemInfo::PrintTaskList() {
 }
 
 void SystemInfo::PrintHeapStats() {
-    int free_sram = heap_caps_get_free_size(MALLOC_CAP_INTERNAL);
-    int min_free_sram = heap_caps_get_minimum_free_size(MALLOC_CAP_INTERNAL);
-    ESP_LOGI(TAG, "free sram: %u minimal sram: %u", free_sram, min_free_sram);
+    const auto stats = GetHeapStats();
+    ESP_LOGI(TAG, "free sram: %u minimal sram: %u largest sram: %u | "
+                 "psram free: %u minimum: %u largest: %u | allocation failures: %lu last bytes: %lu caps: 0x%lx",
+             static_cast<unsigned>(stats.internal_free), static_cast<unsigned>(stats.internal_minimum),
+             static_cast<unsigned>(stats.internal_largest), static_cast<unsigned>(stats.psram_free),
+             static_cast<unsigned>(stats.psram_minimum), static_cast<unsigned>(stats.psram_largest),
+             static_cast<unsigned long>(stats.allocation_failures),
+             static_cast<unsigned long>(stats.last_failed_size), static_cast<unsigned long>(stats.last_failed_caps));
 }
 
 void SystemInfo::PrintPmLocks() {

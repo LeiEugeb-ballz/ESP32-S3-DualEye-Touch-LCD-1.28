@@ -6,6 +6,9 @@
 #include "mcp_server.h"
 #include <esp_log.h>
 #include <esp_app_desc.h>
+#include <esp_ota_ops.h>
+#include <esp_partition.h>
+#include <esp_system.h>
 #include <algorithm>
 #include <cstring>
 #include <esp_pthread.h>
@@ -19,6 +22,78 @@
 #include "lvgl_display.h"
 
 #define TAG "MCP"
+
+namespace {
+
+const esp_partition_t* FindOtaSlot(int slot) {
+    if (slot < 0 || slot > 15) {
+        return nullptr;
+    }
+    auto subtype = static_cast<esp_partition_subtype_t>(ESP_PARTITION_SUBTYPE_APP_OTA_0 + slot);
+    return esp_partition_find_first(ESP_PARTITION_TYPE_APP, subtype, nullptr);
+}
+
+bool ReadAppDescription(const esp_partition_t* partition, esp_app_desc_t* desc) {
+    if (!partition || !desc) {
+        return false;
+    }
+    return esp_ota_get_partition_description(partition, desc) == ESP_OK;
+}
+
+void AddSlotJson(cJSON* slots, int slot, const esp_partition_t* running, const esp_partition_t* configured_boot) {
+    const esp_partition_t* partition = FindOtaSlot(slot);
+    cJSON* item = cJSON_CreateObject();
+    cJSON_AddNumberToObject(item, "slot", slot);
+
+    if (!partition) {
+        cJSON_AddStringToObject(item, "label", slot == 0 ? "ota_0" : "ota_1");
+        cJSON_AddBoolToObject(item, "present", false);
+        cJSON_AddBoolToObject(item, "valid_app", false);
+        cJSON_AddItemToArray(slots, item);
+        return;
+    }
+
+    cJSON_AddStringToObject(item, "label", partition->label);
+    cJSON_AddBoolToObject(item, "present", true);
+    cJSON_AddNumberToObject(item, "address", partition->address);
+    cJSON_AddNumberToObject(item, "size", partition->size);
+    cJSON_AddBoolToObject(item, "running", running && partition->address == running->address);
+    cJSON_AddBoolToObject(item, "configured_boot", configured_boot && partition->address == configured_boot->address);
+
+    esp_app_desc_t desc = {};
+    bool valid = ReadAppDescription(partition, &desc);
+    cJSON_AddBoolToObject(item, "valid_app", valid);
+    if (valid) {
+        cJSON_AddStringToObject(item, "project_name", desc.project_name);
+        cJSON_AddStringToObject(item, "version", desc.version);
+        cJSON_AddStringToObject(item, "compile_date", desc.date);
+        cJSON_AddStringToObject(item, "compile_time", desc.time);
+        cJSON_AddStringToObject(item, "idf_version", desc.idf_ver);
+    }
+
+    cJSON_AddItemToArray(slots, item);
+}
+
+cJSON* BuildBootSlotsJson() {
+    const esp_partition_t* running = esp_ota_get_running_partition();
+    const esp_partition_t* configured_boot = esp_ota_get_boot_partition();
+    const esp_partition_t* next_update = esp_ota_get_next_update_partition(nullptr);
+
+    cJSON* root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "running_label", running ? running->label : "unknown");
+    cJSON_AddStringToObject(root, "configured_boot_label", configured_boot ? configured_boot->label : "unknown");
+    cJSON_AddStringToObject(root, "next_update_label", next_update ? next_update->label : "unknown");
+    cJSON_AddBoolToObject(root, "rollback_enabled", true);
+    cJSON_AddStringToObject(root, "safety", "switch_slot refuses missing or invalid app partitions and requires an explicit user-only tool call");
+
+    cJSON* slots = cJSON_CreateArray();
+    AddSlotJson(slots, 0, running, configured_boot);
+    AddSlotJson(slots, 1, running, configured_boot);
+    cJSON_AddItemToObject(root, "slots", slots);
+    return root;
+}
+
+}  // namespace
 
 McpServer::McpServer() {
 }
@@ -164,8 +239,85 @@ void McpServer::AddUserOnlyTools() {
                     ESP_LOGE(TAG, "Firmware upgrade failed");
                 }
             });
-            
+
             return true;
+        });
+
+    AddUserOnlyTool("self.boot.get_slots",
+        "Get boot slot status for the dual OTA layout, including running slot, configured boot slot, next update slot, and whether each slot contains a valid app image.",
+        PropertyList(),
+        [](const PropertyList& properties) -> ReturnValue {
+            return BuildBootSlotsJson();
+        });
+
+    AddUserOnlyTool("self.boot.switch_slot",
+        "Switch the next boot to ota_0 or ota_1 after validating that the target slot contains a bootable app, then reboot. User-only safety tool.",
+        PropertyList({
+            Property("slot", kPropertyTypeInteger, 0, 1)
+        }),
+        [](const PropertyList& properties) -> ReturnValue {
+            int slot = properties["slot"].value<int>();
+            const esp_partition_t* target = FindOtaSlot(slot);
+            if (!target) {
+                return std::string("Refused: requested OTA slot is not present in the partition table.");
+            }
+
+            esp_app_desc_t desc = {};
+            if (!ReadAppDescription(target, &desc)) {
+                return std::string("Refused: requested OTA slot does not contain a valid bootable app image.");
+            }
+
+            const esp_partition_t* running = esp_ota_get_running_partition();
+            if (running && running->address == target->address) {
+                cJSON* root = cJSON_CreateObject();
+                cJSON_AddStringToObject(root, "status", "already_running");
+                cJSON_AddStringToObject(root, "label", target->label);
+                cJSON_AddStringToObject(root, "version", desc.version);
+                return root;
+            }
+
+            ESP_LOGW(TAG, "User requested boot slot switch to %s", target->label);
+            auto& app = Application::GetInstance();
+            app.Schedule([slot, &app]() {
+                const esp_partition_t* scheduled_target = FindOtaSlot(slot);
+                esp_app_desc_t scheduled_desc = {};
+                auto display = Board::GetInstance().GetDisplay();
+
+                if (!scheduled_target || !ReadAppDescription(scheduled_target, &scheduled_desc)) {
+                    ESP_LOGE(TAG, "Boot slot switch aborted: target slot is missing or invalid");
+                    if (display) {
+                        display->SetChatMessage("system", "Boot switch aborted: target slot invalid");
+                    }
+                    return;
+                }
+
+                if (display) {
+                    std::string msg = "Switching boot slot to ";
+                    msg += scheduled_target->label;
+                    msg += "; rebooting...";
+                    display->SetStatus("Switching boot slot");
+                    display->SetChatMessage("system", msg.c_str());
+                }
+
+                vTaskDelay(pdMS_TO_TICKS(2000));
+                esp_err_t err = esp_ota_set_boot_partition(scheduled_target);
+                if (err != ESP_OK) {
+                    ESP_LOGE(TAG, "esp_ota_set_boot_partition(%s) failed: %s", scheduled_target->label, esp_err_to_name(err));
+                    if (display) {
+                        display->SetChatMessage("system", "Boot switch failed");
+                    }
+                    return;
+                }
+
+                ESP_LOGW(TAG, "Boot partition set to %s (%s %s); rebooting", scheduled_target->label, scheduled_desc.project_name, scheduled_desc.version);
+                app.Reboot();
+            });
+
+            cJSON* root = cJSON_CreateObject();
+            cJSON_AddStringToObject(root, "status", "scheduled_reboot");
+            cJSON_AddStringToObject(root, "target_label", target->label);
+            cJSON_AddStringToObject(root, "target_version", desc.version);
+            return root;
         });
 
     // Display control

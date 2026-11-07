@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>JAPA DualEye AI Companion — Control Portal v3.0.0.1</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #090c13;
+      --bg-surface: #121824;
+      --bg-surface-elevated: #1a2234;
+      --bg-surface-hover: #222d44;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(6, 182, 212, 0.35);
+      --text-primary: #f8fafc;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --accent-cyan: #06b6d4;
+      --accent-emerald: #10b981;
+      --accent-amber: #f59e0b;
+      --accent-rose: #f43f5e;
+      --accent-purple: #8b5cf6;
+      --font-sans: 'Outfit', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+
+    body {
+      font-family: var(--font-sans);
+      background-color: var(--bg-base);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background-image: 
+        radial-gradient(circle at 12% 10%, rgba(6, 182, 212, 0.07) 0%, transparent 45%),
+        radial-gradient(circle at 88% 90%, rgba(139, 92, 246, 0.07) 0%, transparent 50%);
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.9rem 2rem;
+      background: rgba(9, 12, 19, 0.92);
+      backdrop-filter: blur(16px);
+      border-bottom: 1px solid var(--border-subtle);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .brand-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent-cyan), var(--accent-purple));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.25rem;
+      box-shadow: 0 0 16px rgba(6, 182, 212, 0.4);
+    }
+
+    .brand-title {
+      font-size: 1.2rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .version-tag {
+      font-size: 0.72rem;
+      font-family: var(--font-mono);
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent-emerald);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      padding: 0.2rem 0.55rem;
+      border-radius: 9999px;
+      margin-left: 0.4rem;
+      font-weight: 500;
+    }
+
+    .connection-strip {
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
+    }
+
+    .ip-input-group {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 0.3rem 0.6rem;
+    }
+
+    .ip-input-group label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-family: var(--font-mono);
+    }
+
+    .ip-input-group input {
+      background: transparent;
+      border: none;
+      color: var(--text-primary);
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      width: 135px;
+      outline: none;
+    }
+
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.3rem 0.75rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      font-family: var(--font-mono);
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .status-badge.online .status-dot {
+      background: var(--accent-emerald);
+      box-shadow: 0 0 8px var(--accent-emerald);
+      animation: pulse 2s infinite ease-in-out;
+    }
+
+    .status-badge.offline .status-dot { background: var(--accent-rose); }
+    .status-badge.checking .status-dot { background: var(--accent-amber); }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    main {
+      flex: 1;
+      max-width: 1440px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 1.75rem;
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 1.75rem;
+    }
+
+    @media (max-width: 1080px) {
+      main { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-subtle);
+      border-radius: 14px;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+      transition: border-color 0.2s ease;
+    }
+
+    .panel:hover { border-color: rgba(255, 255, 255, 0.14); }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 0.6rem;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+
+    .panel-title {
+      font-size: 1.05rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      letter-spacing: -0.01em;
+    }
+
+    .avatar-stage {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem 1rem;
+      background: radial-gradient(circle at center, #141c2c 0%, #060911 100%);
+      border-radius: 12px;
+      border: 1px solid var(--border-subtle);
+      position: relative;
+    }
+
+    .eyes-container {
+      display: flex;
+      gap: 2.25rem;
+      position: relative;
+    }
+
+    .eye-socket {
+      width: 190px;
+      height: 190px;
+      border-radius: 50%;
+      background: #000;
+      border: 4px solid #1e293b;
+      box-shadow: 
+        inset 0 0 25px rgba(0,0,0,0.95),
+        0 8px 24px rgba(0,0,0,0.8),
+        0 0 16px rgba(6, 182, 212, 0.2);
+      overflow: hidden;
+      position: relative;
+      cursor: grab;
+    }
+
+    .eye-socket:active { cursor: grabbing; }
+
+    .eye-socket canvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
+
+    .stage-hud {
+      margin-top: 1.25rem;
+      display: flex;
+      align-items: center;
+      gap: 1.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    .state-pill {
+      padding: 0.25rem 0.65rem;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-subtle);
+      color: var(--accent-cyan);
+      font-weight: 600;
+    }
+
+    .presets-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 0.65rem;
+    }
+
+    .preset-btn {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 0.65rem 0.5rem;
+      color: var(--text-secondary);
+      font-family: var(--font-sans);
+      font-size: 0.82rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.35rem;
+      transition: all 0.18s ease-out;
+    }
+
+    .preset-btn:hover {
+      background: var(--bg-surface-hover);
+      color: var(--text-primary);
+      border-color: var(--accent-cyan);
+      transform: translateY(-1px);
+    }
+
+    .preset-btn.active {
+      background: rgba(6, 182, 212, 0.12);
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+      box-shadow: 0 0 12px rgba(6, 182, 212, 0.2);
+    }
+
+    .preset-dot {
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.25);
+    }
+
+    .btn {
+      background: var(--bg-surface-elevated);
+      color: var(--text-primary);
+      border: 1px solid var(--border-subtle);
+      padding: 0.55rem 1rem;
+      border-radius: 8px;
+      font-family: var(--font-sans);
+      font-size: 0.85rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.45rem;
+      transition: all 0.18s ease-out;
+    }
+
+    .btn:hover:not(:disabled) {
+      background: var(--bg-surface-hover);
+      border-color: rgba(255,255,255,0.2);
+    }
+
+    .btn:active:not(:disabled) { transform: scale(0.98); }
+    .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+    .btn-primary {
+      background: linear-gradient(135deg, #0284c7, #06b6d4);
+      border: none;
+      color: #fff;
+      box-shadow: 0 2px 10px rgba(6, 182, 212, 0.3);
+    }
+    .btn-primary:hover:not(:disabled) {
+      box-shadow: 0 4px 16px rgba(6, 182, 212, 0.45);
+    }
+
+    .btn-danger {
+      background: rgba(244, 63, 94, 0.15);
+      border-color: rgba(244, 63, 94, 0.35);
+      color: var(--accent-rose);
+    }
+    .btn-danger:hover:not(:disabled) {
+      background: rgba(244, 63, 94, 0.25);
+    }
+
+    .data-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.6rem;
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+    }
+
+    .data-card {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 0.65rem 0.85rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .data-label {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .data-value {
+      font-weight: 600;
+      color: var(--text-primary);
+      word-break: break-all;
+    }
+
+    .provider-selector {
+      display: flex;
+      gap: 0.6rem;
+    }
+
+    .provider-card {
+      flex: 1;
+      padding: 0.75rem;
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      cursor: pointer;
+      text-align: center;
+      transition: all 0.18s ease;
+    }
+
+    .provider-card:hover { border-color: var(--accent-cyan); }
+    .provider-card.selected {
+      background: rgba(6, 182, 212, 0.12);
+      border-color: var(--accent-cyan);
+      color: var(--accent-cyan);
+    }
+
+    .provider-name {
+      font-weight: 600;
+      font-size: 0.88rem;
+    }
+
+    .provider-meta {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-top: 0.2rem;
+      font-family: var(--font-mono);
+    }
+
+    .persona-strip {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .persona-chip {
+      padding: 0.45rem 0.85rem;
+      border-radius: 6px;
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-secondary);
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: all 0.18s ease;
+    }
+
+    .persona-chip:hover { color: var(--text-primary); border-color: rgba(255,255,255,0.2); }
+    .persona-chip.selected {
+      background: rgba(139, 92, 246, 0.16);
+      border-color: var(--accent-purple);
+      color: var(--accent-purple);
+      font-weight: 600;
+    }
+
+    .slot-card {
+      background: var(--bg-surface-elevated);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    
+    .transcript-box {
+      min-height: 190px;
+      max-height: 250px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      padding: 0.85rem;
+      background: rgba(0, 0, 0, 0.35);
+      border-radius: 8px;
+      border: 1px solid var(--border-subtle);
+    }
+
+    .transcript-turn {
+      display: flex;
+      flex-direction: column;
+      gap: 0.25rem;
+      animation: fadeIn 0.2s ease-out;
+    }
+
+    .transcript-header {
+      display: flex;
+      align-items: center;
+      gap: 0.45rem;
+      font-size: 0.76rem;
+      font-weight: 600;
+    }
+
+    .badge-user {
+      color: #38bdf8;
+      background: rgba(56, 189, 248, 0.15);
+      padding: 0.1rem 0.45rem;
+      border-radius: 4px;
+    }
+
+    .badge-assistant {
+      color: #c084fc;
+      background: rgba(192, 132, 252, 0.15);
+      padding: 0.1rem 0.45rem;
+      border-radius: 4px;
+    }
+
+    .badge-system {
+      color: #94a3b8;
+      background: rgba(148, 163, 184, 0.12);
+      padding: 0.1rem 0.45rem;
+      border-radius: 4px;
+    }
+
+    .transcript-bubble {
+      padding: 0.55rem 0.8rem;
+      border-radius: 6px;
+      font-size: 0.88rem;
+      line-height: 1.4;
+    }
+
+    .bubble-user {
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      color: #f0f9ff;
+    }
+
+    .bubble-assistant {
+      background: rgba(192, 132, 252, 0.08);
+      border: 1px solid rgba(192, 132, 252, 0.2);
+      color: #faf5ff;
+    }
+
+    .bubble-system {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border-subtle);
+      color: #94a3b8;
+      font-size: 0.8rem;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .console-box {
+      background: #06080d;
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 0.75rem;
+      font-family: var(--font-mono);
+      font-size: 0.78rem;
+      color: var(--text-secondary);
+      height: 120px;
+      overflow-y: auto;
+      line-height: 1.5;
+    }
+
+    .console-entry { margin-bottom: 0.25rem; }
+    .console-time { color: var(--text-muted); margin-right: 0.4rem; }
+    .console-success { color: var(--accent-emerald); }
+    .console-warn { color: var(--accent-amber); }
+    .console-error { color: var(--accent-rose); }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-icon">👁️</div>
+      <div>
+        <span class="brand-title">JAPA DualEye AI Companion</span>
+        <span class="version-tag">v3.0.0.1 (Eval+Review)</span>
+      </div>
+    </div>
+    <div class="connection-strip">
+      <div class="ip-input-group">
+        <label for="boardIp">DEVICE IP:</label>
+        <input type="text" id="boardIp" placeholder="192.168.88.209" autocomplete="off">
+        <button class="btn" id="btnPing" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">Probe</button>
+      </div>
+      <div class="status-badge checking" id="deviceBadge">
+        <span class="status-dot"></span>
+        <span id="deviceBadgeText">Connecting...</span>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+      <section class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">👁️ Photorealistic Uncanny Eye Stage</h2>
+          <span class="state-pill" id="liveStateLabel">STANDBY</span>
+        </div>
+
+        <div class="avatar-stage" id="stageArea">
+          <div class="eyes-container">
+            <div class="eye-socket" id="socketL">
+              <canvas id="leftEyeCanvas" width="240" height="240"></canvas>
+            </div>
+            <div class="eye-socket" id="socketR">
+              <canvas id="rightEyeCanvas" width="240" height="240"></canvas>
+            </div>
+          </div>
+          <div class="stage-hud">
+            <span>Gaze: <span id="hudGaze">0.0, 0.0</span></span>
+            <span>Pupil: <span id="hudPupil">28.0 px</span></span>
+            <span>FPS: <span id="hudFps">60</span></span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 0.6rem; margin: 1rem 0; flex-wrap: wrap;">
+          <button class="btn btn-primary" id="btnWakeCompanion" onclick="wakeCompanion()" style="flex: 2; padding: 0.65rem 0.9rem; font-weight: 600; font-size: 0.92rem; background: linear-gradient(135deg, #06b6d4, #10b981);">
+            🎙️ Wake Up (Mic Active)
+          </button>
+          <button class="btn" id="btnSleepCompanion" onclick="sleepCompanion()" style="flex: 2; padding: 0.65rem 0.9rem; font-weight: 600; font-size: 0.92rem; background: linear-gradient(135deg, #4f46e5, #7c3aed); border: 1px solid rgba(124, 58, 237, 0.5);">
+            💤 Sleep (Deactivate Mic)
+          </button>
+          <button class="btn" id="btnCyclePreset" onclick="cycleEyePreset()" style="flex: 1; padding: 0.65rem 0.75rem; font-weight: 500;">
+            🔄 Cycle Eyes
+          </button>
+          <button class="btn btn-danger" id="btnStopChat" onclick="stopChat()" style="padding: 0.65rem 0.75rem;">
+            ⏹️ Stop
+          </button>
+        </div>
+
+        <div style="margin: 1.2rem 0; padding: 0.9rem; background: rgba(255,255,255,0.03); border-radius: 8px; border: 1px solid rgba(255,255,255,0.08);">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+            <label style="font-size: 0.88rem; font-weight: 600; color: var(--text-primary);">Eye Scale (Fit Full Eye to Display): <span id="valScaleDisplay" style="color: var(--accent-cyan);">0.86</span></label>
+            <span style="font-size: 0.75rem; color: var(--text-secondary);">Anatomically proportioned</span>
+          </div>
+          <input type="range" id="sliderEyeScale" min="0.50" max="1.10" step="0.01" value="0.86" style="width: 100%; cursor: pointer;" oninput="onScaleSliderChange(this.value)">
+          <div style="display: flex; justify-content: space-between; font-size: 0.7rem; color: var(--text-secondary); margin-top: 0.2rem;">
+            <span>0.50 (Compact)</span>
+            <span>0.86 (Fits 1.28" Bezel Relatively)</span>
+            <span>1.10 (Wide)</span>
+          </div>
+        </div>
+
+        <div>
+          <h3 style="font-size: 0.9rem; margin-bottom: 0.75rem; color: var(--text-secondary);">Select Hardware Eye Preset (11 Profiles)</h3>
+          <div class="presets-grid" id="presetsGrid"></div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">⚡ Hardware Telemetry & Health</h2>
+          <button class="btn" id="btnRefreshTelemetry" style="font-size: 0.75rem; padding: 0.25rem 0.6rem;">Refresh</button>
+        </div>
+        <div class="data-grid">
+          <div class="data-card">
+            <span class="data-label">Active Boot Slot</span>
+            <span class="data-value" id="valBootSlot">ota_0</span>
+          </div>
+          <div class="data-card">
+            <span class="data-label">Free Internal SRAM</span>
+            <span class="data-value" id="valSramFree">-- KB</span>
+          </div>
+          <div class="data-card">
+            <span class="data-label">Min SRAM Lifetime</span>
+            <span class="data-value" id="valSramMin">-- KB</span>
+          </div>
+          <div class="data-card">
+            <span class="data-label">PSRAM Free</span>
+            <span class="data-value" id="valPsramFree">-- MB</span>
+          </div>
+          <div class="data-card">
+            <span class="data-label">Allocation Failures</span>
+            <span class="data-value" id="valAllocFailures" style="color: var(--accent-emerald);">0</span>
+          </div>
+          <div class="data-card">
+            <span class="data-label">AEC Barge-In Flag</span>
+            <span class="data-value" id="valAecStatus">Available (Feature)</span>
+          </div>
+          <div class="data-card" style="grid-column: span 2;">
+            <span class="data-label">Firmware ELF SHA256</span>
+            <span class="data-value" id="valSha256" style="font-size: 0.7rem; color: var(--text-secondary);">Loading...</span>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 1.5rem;">
+      <section class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">🧠 Voice Provider & Model Routing</h2>
+          <span class="version-tag" id="providerActiveBadge">Mistral (Primary)</span>
+        </div>
+
+        <div>
+          <div class="provider-selector">
+            <div class="provider-card selected" id="cardMistral" onclick="selectProvider('mistral')">
+              <div class="provider-name">Mistral Voxtral</div>
+              <div class="provider-meta">STT + Chat + Direct TTS</div>
+            </div>
+            <div class="provider-card" id="cardXiaozhi" onclick="selectProvider('xiaozhi')">
+              <div class="provider-name">Xiaozhi Cloud</div>
+              <div class="provider-meta">Direct Cloud Fallback</div>
+            </div>
+            <div class="provider-card" id="cardLive" onclick="selectProvider('live')">
+              <div class="provider-name">GPT-Live Test</div>
+              <div class="provider-meta">Optional Full-Duplex</div>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <label style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.35rem; display: block;">Companion Personality</label>
+          <div class="persona-strip">
+            <div class="persona-chip selected" onclick="selectPersona('japa')" id="pChipJapa">JAPA (Warm & Natural)</div>
+            <div class="persona-chip" onclick="selectPersona('calm')" id="pChipCalm">Calm (Attentive)</div>
+            <div class="persona-chip" onclick="selectPersona('playful')" id="pChipPlayful">Playful (Light Wit)</div>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 0.6rem; align-items: center;">
+          <button class="btn btn-primary" id="btnApplyProvider">Apply Voice Route</button>
+          <button class="btn" id="btnProbeMistral">Probe Mistral Chain</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">🛡️ Dual-Slot Boot & Recovery Control</h2>
+        </div>
+        <p style="font-size: 0.82rem; color: var(--text-secondary);">
+          Safe partition switching with cryptographic image verification (refuses blank or corrupted partitions).
+        </p>
+
+        <div style="display: flex; flex-direction: column; gap: 0.6rem;">
+          <div class="slot-card">
+            <div>
+              <div style="font-weight: 600; font-size: 0.9rem;">Slot 0: ota_0 (Current Release)</div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">Version 3.0.0.1 · Verified bootable</div>
+            </div>
+            <button class="btn btn-danger" id="btnSwitchSlot0" onclick="switchSlot(0)">Switch to Slot 0</button>
+          </div>
+
+          <div class="slot-card">
+            <div>
+              <div style="font-weight: 600; font-size: 0.9rem;">Slot 1: ota_1 (Recovery Alternate)</div>
+              <div style="font-size: 0.72rem; color: var(--text-muted); font-family: var(--font-mono);">Alternate OTA slot</div>
+            </div>
+            <button class="btn btn-danger" id="btnSwitchSlot1" onclick="switchSlot(1)">Switch to Slot 1</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <div style="display: flex; align-items: center; gap: 0.65rem;">
+            <h2 class="panel-title">💬 Live Conversation Transcript</h2>
+            <span id="micStatusBadge" style="font-size: 0.72rem; font-weight: 600; padding: 0.18rem 0.6rem; border-radius: 9999px; background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);">
+              🟢 Mic Active
+            </span>
+          </div>
+          <button class="btn" onclick="clearTranscript()" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">Clear</button>
+        </div>
+        <div class="transcript-box" id="transcriptBox">
+          <div class="transcript-turn">
+            <div class="transcript-header">
+              <span class="badge-system">System</span>
+              <span style="font-size: 0.72rem; color: var(--text-muted);">Ready</span>
+            </div>
+            <div class="transcript-bubble bubble-system">
+              Conversation ready. Speak into the microphone or click Wake/Talk to begin!
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-header">
+          <h2 class="panel-title">⚙️ Backend Actions & Hardware Diagnostics</h2>
+          <button class="btn" onclick="clearConsole()" style="font-size: 0.75rem; padding: 0.2rem 0.5rem;">Clear</button>
+        </div>
+        <div class="console-box" id="consoleBox" style="min-height: 140px; max-height: 200px;">
+          <div class="console-entry"><span class="console-time">[INIT]</span> JAPA DualEye Diagnostics initialized.</div>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    'use strict';
+
+    const byId = id => document.getElementById(id);
+    const boardIpInput = byId('boardIp');
+    const deviceBadge = byId('deviceBadge');
+    const deviceBadgeText = byId('deviceBadgeText');
+    const consoleBox = byId('consoleBox');
+
+    let currentIp = localStorage.getItem('japa.device_ip') || '192.168.88.209';
+    boardIpInput.value = currentIp;
+    let currentProvider = 'mistral';
+    let currentPersona = 'japa';
+    let deviceControlToken = '';
+    let gatewayAdminToken = '';
+
+
+    const transcriptBox = byId('transcriptBox');
+    const micStatusBadge = byId('micStatusBadge');
+
+    function appendTranscript(speaker, text, role = 'system') {
+      if (!text || !text.trim()) return;
+      const turn = document.createElement('div');
+      turn.className = 'transcript-turn';
+      const time = new Date().toLocaleTimeString();
+      let badgeClass = 'badge-system';
+      let bubbleClass = 'bubble-system';
+      let label = speaker;
+      if (role === 'user') {
+        badgeClass = 'badge-user';
+        bubbleClass = 'bubble-user';
+        label = '👤 You';
+      } else if (role === 'assistant') {
+        badgeClass = 'badge-assistant';
+        bubbleClass = 'bubble-assistant';
+        label = '✨ JAPA';
+      }
+      turn.innerHTML = `
+        <div class="transcript-header">
+          <span class="${badgeClass}">${label}</span>
+          <span style="font-size: 0.7rem; color: var(--text-muted);">${time}</span>
+        </div>
+        <div class="transcript-bubble ${bubbleClass}">
+          ${escapeHtml(text)}
+        </div>
+      `;
+      transcriptBox.appendChild(turn);
+      transcriptBox.scrollTop = transcriptBox.scrollHeight;
+    }
+
+    function clearTranscript() {
+      transcriptBox.innerHTML = `
+        <div class="transcript-turn">
+          <div class="transcript-header">
+            <span class="badge-system">System</span>
+          </div>
+          <div class="transcript-bubble bubble-system">Transcript cleared.</div>
+        </div>`;
+    }
+
+    function escapeHtml(str) {
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    function updateMicBadge(isActive, isSleeping) {
+      if (isSleeping) {
+        micStatusBadge.textContent = '💤 Sleeping (Mic Off)';
+        micStatusBadge.style.color = '#f59e0b';
+        micStatusBadge.style.background = 'rgba(245, 158, 11, 0.15)';
+        micStatusBadge.style.border = '1px solid rgba(245, 158, 11, 0.35)';
+      } else if (isActive) {
+        micStatusBadge.textContent = '🟢 Mic Active';
+        micStatusBadge.style.color = '#10b981';
+        micStatusBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+        micStatusBadge.style.border = '1px solid rgba(16, 185, 129, 0.35)';
+      } else {
+        micStatusBadge.textContent = '⚪ Standby';
+        micStatusBadge.style.color = '#94a3b8';
+        micStatusBadge.style.background = 'rgba(148, 163, 184, 0.12)';
+        micStatusBadge.style.border = '1px solid rgba(148, 163, 184, 0.25)';
+      }
+    }
+
+        function log(msg, type = '') {
+      const entry = document.createElement('div');
+      entry.className = 'console-entry';
+      const time = new Date().toLocaleTimeString();
+      let colorClass = '';
+      if (type === 'success') colorClass = 'console-success';
+      if (type === 'warn') colorClass = 'console-warn';
+      if (type === 'error') colorClass = 'console-error';
+      entry.innerHTML = `<span class="console-time">[${time}]</span> <span class="${colorClass}">${msg}</span>`;
+      consoleBox.appendChild(entry);
+      consoleBox.scrollTop = consoleBox.scrollHeight;
+    }
+
+    function clearConsole() { consoleBox.innerHTML = ''; }
+
+    boardIpInput.addEventListener('change', () => {
+      currentIp = boardIpInput.value.trim();
+      localStorage.setItem('japa.device_ip', currentIp);
+      log(`Device target IP updated to ${currentIp}`);
+      checkDeviceConnection();
+    });
+
+    byId('btnPing').addEventListener('click', checkDeviceConnection);
+    byId('btnRefreshTelemetry').addEventListener('click', checkDeviceConnection);
+
+    async function checkDeviceConnection() {
+      deviceBadge.className = 'status-badge checking';
+      deviceBadgeText.textContent = 'Probing...';
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 3500);
+        const res = await fetch(`http://${currentIp}:3233/boot/status`, { signal: controller.signal, cache: 'no-store' });
+        clearTimeout(timeout);
+        if (res.ok) {
+          const data = await res.json();
+          deviceBadge.className = 'status-badge online';
+          deviceBadgeText.textContent = 'Online';
+          updateTelemetry(data);
+          log(`Connected to DualEye on ${currentIp}`, 'success');
+          fetchVoiceStatus();
+        } else {
+          throw new Error(`HTTP ${res.status}`);
+        }
+      } catch (err) {
+        deviceBadge.className = 'status-badge offline';
+        deviceBadgeText.textContent = 'Unreachable';
+        log(`Device connection probe failed: ${err.message}`, 'warn');
+      }
+    }
+
+    function updateTelemetry(boot) {
+      if (!boot) return;
+      byId('valBootSlot').textContent = boot.running_label || 'ota_0';
+      byId('valSramFree').textContent = `${Math.round(boot.internal_free / 1024)} KB`;
+      byId('valSramMin').textContent = `${Math.round(boot.internal_minimum / 1024)} KB`;
+      byId('valPsramFree').textContent = `${(boot.psram_free / (1024 * 1024)).toFixed(1)} MB`;
+      byId('valAllocFailures').textContent = boot.allocation_failures || 0;
+      byId('valSha256').textContent = boot.elf_sha256 || 'N/A';
+      byId('liveStateLabel').textContent = (boot.device_state || 'STANDBY').toUpperCase();
+    }
+
+    async function fetchVoiceStatus() {
+      try {
+        const res = await fetch(`http://${currentIp}:3233/voice/status`, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          deviceControlToken = data.control_token || '';
+          if (data.active) {
+            byId('providerActiveBadge').textContent = `${data.active.toUpperCase()} (${data.selected})`;
+          }
+        }
+      } catch {}
+    }
+
+    function selectProvider(p) {
+      currentProvider = p;
+      ['cardMistral', 'cardXiaozhi', 'cardLive'].forEach(id => byId(id).classList.remove('selected'));
+      if (p === 'mistral') byId('cardMistral').classList.add('selected');
+      if (p === 'xiaozhi') byId('cardXiaozhi').classList.add('selected');
+      if (p === 'live') byId('cardLive').classList.add('selected');
+    }
+
+    function selectPersona(ps) {
+      currentPersona = ps;
+      ['pChipJapa', 'pChipCalm', 'pChipPlayful'].forEach(id => byId(id).classList.remove('selected'));
+      if (ps === 'japa') byId('pChipJapa').classList.add('selected');
+      if (ps === 'calm') byId('pChipCalm').classList.add('selected');
+      if (ps === 'playful') byId('pChipPlayful').classList.add('selected');
+    }
+
+    byId('btnApplyProvider').addEventListener('click', async () => {
+      log(`Applying voice provider '${currentProvider}'...`);
+      try {
+        const headers = { 'Content-Type': 'application/json' };
+        if (gatewayAdminToken) headers['X-JAPA-Admin'] = gatewayAdminToken;
+        const gatewayRes = await fetch('http://localhost:8765/api/provider', {
+          method: 'POST',
+          headers: headers,
+          body: JSON.stringify({ ip: currentIp, profile: currentProvider, gateway_ip: '192.168.88.252' })
+        }).catch(() => null);
+
+        if (gatewayRes && gatewayRes.ok) {
+          log(`Voice provider ${currentProvider} applied via gateway`, 'success');
+        } else if (deviceControlToken) {
+          const res = await fetch(`http://${currentIp}:3233/voice/profile`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-JAPA-Control': deviceControlToken },
+            body: JSON.stringify({ profile: currentProvider === 'mistral' ? 'gateway' : currentProvider })
+          });
+          if (res.ok) log(`Direct voice profile update requested on device`, 'success');
+        }
+      } catch (err) {
+        log(`Failed to update provider: ${err.message}`, 'error');
+      }
+    });
+
+    byId('btnProbeMistral').addEventListener('click', async () => {
+      log('Running full synthetic Mistral probe (STT + Chat + TTS)...');
+      try {
+        const headers = {};
+        if (gatewayAdminToken) headers['X-JAPA-Admin'] = gatewayAdminToken;
+        const res = await fetch('http://localhost:8765/api/readiness', { method: 'POST', headers: headers });
+        if (res.ok) {
+          log('Mistral complete voice chain verified successfully!', 'success');
+        } else {
+          log('Mistral probe returned not ready. Check gateway process & API key.', 'warn');
+        }
+      } catch {
+        log('Gateway on localhost:8765 unreachable. Start voice_gateway first.', 'warn');
+      }
+    });
+
+    async function switchSlot(slot) {
+      if (!confirm(`Switch boot slot to ota_${slot} and reboot the device?`)) return;
+      log(`Requesting safe switch to ota_${slot}...`, 'warn');
+      try {
+        const voiceRes = await fetch(`http://${currentIp}:3233/voice/status`);
+        const voice = await voiceRes.json();
+        if (!voice.control_token || !voice.can_switch) {
+          throw new Error('Device is busy in conversation or boot control token missing');
+        }
+        const res = await fetch(`http://${currentIp}:3233/boot/switch?slot=${slot}&confirm=SWITCH`, {
+          method: 'POST',
+          headers: { 'X-JAPA-Control': voice.control_token }
+        });
+        const result = await res.json();
+        log(`Switch scheduled: ${JSON.stringify(result)}`, 'success');
+      } catch (err) {
+        log(`Boot slot switch failed: ${err.message}`, 'error');
+      }
+    }
+
+    const leftCanvas = byId('leftEyeCanvas');
+    const rightCanvas = byId('rightEyeCanvas');
+    const ctxL = leftCanvas.getContext('2d');
+    const ctxR = rightCanvas.getContext('2d');
+
+    let currentPresetIdx = 0;
+    let gazeX = 0, gazeY = 0;
+    let targetGazeX = 0, targetGazeY = 0;
+    let pupilR = 30, targetPupilR = 30;
+    let upperLid = 0.36, lowerLid = 0.20;
+    let lastSaccade = Date.now();
+
+    const presets = [
+      { id: 0, name: 'Default (Blue)', sclera: '#e2e8f0', iris: [25, 80, 180], highlight: [130, 200, 255], ring: [10, 40, 100], slit: false, pupil: 28, upper: 0.36, lower: 0.20 },
+      { id: 1, name: 'Japanese (Brown)', sclera: '#e2e8f0', iris: [120, 60, 20], highlight: [190, 120, 50], ring: [60, 30, 10], slit: false, pupil: 30, upper: 0.35, lower: 0.18 },
+      { id: 2, name: 'Cat (Amber)', sclera: '#fef08a', iris: [215, 150, 10], highlight: [250, 220, 40], ring: [140, 85, 5], slit: true, pupil: 34, upper: 0.44, lower: 0.28 },
+      { id: 3, name: 'Dragon (Fire)', sclera: '#fee2e2', iris: [220, 38, 38], highlight: [251, 146, 60], ring: [127, 29, 29], slit: true, pupil: 36, upper: 0.48, lower: 0.32 },
+      { id: 4, name: 'Terminator (Cyborg)', sclera: '#020617', iris: [255, 0, 30], highlight: [255, 120, 120], ring: [180, 0, 0], slit: false, pupil: 26, upper: 0.30, lower: 0.18 },
+      { id: 5, name: 'Doe (Anime)', sclera: '#f8fafc', iris: [192, 38, 211], highlight: [244, 114, 182], ring: [112, 26, 117], slit: false, pupil: 36, upper: 0.28, lower: 0.15 },
+      { id: 6, name: 'Owl (Night)', sclera: '#fef3c7', iris: [217, 119, 6], highlight: [251, 191, 36], ring: [146, 64, 14], slit: false, pupil: 38, upper: 0.35, lower: 0.20 },
+      { id: 7, name: 'Goat (Horizontal)', sclera: '#fef2f2', iris: [180, 80, 20], highlight: [240, 140, 80], ring: [90, 40, 10], slit: false, goat: true, pupil: 32, upper: 0.40, lower: 0.22 },
+      { id: 8, name: 'Nauga (Monster)', sclera: '#0f172a', iris: [76, 29, 149], highlight: [147, 51, 234], ring: [46, 16, 101], slit: false, pupil: 38, upper: 0.35, lower: 0.20 },
+      { id: 9, name: 'Newt (Amphibian)', sclera: '#ecfccb', iris: [234, 88, 12], highlight: [251, 146, 60], ring: [154, 52, 18], slit: true, pupil: 34, upper: 0.42, lower: 0.26 },
+      { id: 10, name: 'No Sclera (Dragon)', sclera: '#fee2e2', iris: [153, 27, 27], highlight: [239, 68, 68], ring: [80, 15, 15], slit: true, pupil: 40, upper: 0.46, lower: 0.30 }
+    ];
+
+    const pGrid = byId('presetsGrid');
+    presets.forEach((p, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'preset-btn' + (idx === 0 ? ' active' : '');
+      const dotColor = `rgb(${p.iris[0]}, ${p.iris[1]}, ${p.iris[2]})`;
+      btn.innerHTML = `<span class="preset-dot" style="background: ${dotColor};"></span><span>${p.name}</span>`;
+      btn.onclick = () => applyPreset(idx);
+      pGrid.appendChild(btn);
+    });
+
+    function applyPresetLocal(idx) {
+      if (idx < 0 || idx >= presets.length) return;
+      currentPresetIdx = idx;
+      document.querySelectorAll('.preset-btn').forEach((b, i) => b.classList.toggle('active', i === idx));
+      const p = presets[idx];
+      targetPupilR = p.pupil;
+      upperLid = p.upper;
+      lowerLid = p.lower;
+    }
+
+    async function applyPreset(idx) {
+      applyPresetLocal(idx);
+      const p = presets[idx];
+      log(`Setting hardware eye preset: #${idx} (${p.name})...`);
+      try {
+        const res = await fetch(`http://${currentIp}:3233/eyes/preset?id=${idx}`, { method: 'POST' });
+        if (res.ok) {
+          log(`Physical DualEye LCDs updated to preset #${idx} (${p.name})`, 'success');
+        } else {
+          log(`Hardware responded with HTTP ${res.status}`, 'warn');
+        }
+      } catch (err) {
+        log(`Could not reach device on http://${currentIp}:3233: ${err.message}`, 'warn');
+      }
+    }
+
+    let isDraggingScale = false;
+    let scaleDebounceTimer = null;
+    async function onScaleSliderChange(val) {
+      isDraggingScale = true;
+      const numVal = parseFloat(val).toFixed(2);
+      byId('valScaleDisplay').textContent = numVal;
+      clearTimeout(scaleDebounceTimer);
+      scaleDebounceTimer = setTimeout(async () => {
+        try {
+          await fetch(`http://${currentIp}:3233/eyes/scale?scale=${numVal}`, { method: 'POST' });
+        } catch (err) {
+          console.error('Failed to set eye scale:', err);
+        }
+        setTimeout(() => { isDraggingScale = false; }, 400);
+      }, 30);
+    }
+
+    async function cycleEyePreset() {
+      log('Cycling hardware eye preset...');
+      try {
+        const res = await fetch(`http://${currentIp}:3233/eyes/cycle`, { method: 'POST' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.left_id !== undefined) applyPresetLocal(data.left_id);
+          log(`Physical eyes cycled to preset #${data.left_id} (${data.left_name})`, 'success');
+        }
+      } catch (err) {
+        log(`Cycle failed: ${err.message}`, 'warn');
+      }
+    }
+
+    async function sleepCompanion() {
+      log('Putting companion to sleep (deactivating microphone, closing eyelids)...', 'warn');
+      updateMicBadge(false, true);
+      try {
+        const res = await fetch(`http://${currentIp}:3233/chat/sleep`, { method: 'POST' });
+        if (res.ok) {
+          log('Companion sleep mode activated: Microphone deactivated & eyelids closed.', 'success');
+          appendTranscript('System', '💤 Companion entered sleep mode. Microphone is deactivated.', 'system');
+        } else {
+          log(`Sleep request returned HTTP ${res.status}`, 'warn');
+        }
+      } catch (err) {
+        log(`Sleep request failed: ${err.message}`, 'warn');
+      }
+    }
+
+    async function wakeCompanion() {
+      log('Awakening companion (activating microphone, opening eyelids)...', 'warn');
+      updateMicBadge(true, false);
+      try {
+        const res = await fetch(`http://${currentIp}:3233/chat/wake`, { method: 'POST' });
+        if (res.ok) {
+          log('Companion awakened! Microphone is active and listening.', 'success');
+          appendTranscript('System', '🎙️ Companion awakened. Microphone is active and listening!', 'system');
+        } else {
+          log(`Wake returned HTTP ${res.status}`, 'error');
+        }
+      } catch (err) {
+        log(`Wake request failed: ${err.message}`, 'error');
+      }
+    }
+
+    async function stopChat() {
+      log('Sending stop listening signal to companion...');
+      try {
+        const res = await fetch(`http://${currentIp}:3233/chat/stop`, { method: 'POST' });
+        if (res.ok) {
+          log('Companion listening stopped', 'info');
+        }
+      } catch (err) {
+        log(`Stop request failed: ${err.message}`, 'warn');
+      }
+    }
+
+    function renderEye(ctx, isRight) {
+      const w = 240, h = 240, cx = 120, cy = 120;
+      ctx.clearRect(0, 0, w, h);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, 112, 0, Math.PI * 2);
+      ctx.fillStyle = presets[currentPresetIdx].sclera;
+      ctx.fill();
+      ctx.restore();
+
+      const p = presets[currentPresetIdx];
+      const eyeGazeX = gazeX + (isRight ? 1 : -1) * 2;
+      const eyeGazeY = gazeY;
+      const irisX = cx + eyeGazeX * 0.7;
+      const irisY = cy + eyeGazeY * 0.7;
+      const irisR = 56;
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, 110, 0, Math.PI * 2);
+      ctx.clip();
+
+      const irisGrad = ctx.createRadialGradient(irisX, irisY, 4, irisX, irisY, irisR);
+      irisGrad.addColorStop(0, `rgb(${p.highlight[0]}, ${p.highlight[1]}, ${p.highlight[2]})`);
+      irisGrad.addColorStop(0.7, `rgb(${p.iris[0]}, ${p.iris[1]}, ${p.iris[2]})`);
+      irisGrad.addColorStop(1, `rgb(${p.ring[0]}, ${p.ring[1]}, ${p.ring[2]})`);
+
+      ctx.beginPath();
+      ctx.arc(irisX, irisY, irisR, 0, Math.PI * 2);
+      ctx.fillStyle = irisGrad;
+      ctx.fill();
+
+      ctx.beginPath();
+      if (p.slit) {
+        ctx.ellipse(irisX, irisY, Math.max(6, pupilR * 0.3), pupilR * 1.3, 0, 0, Math.PI * 2);
+      } else if (p.goat) {
+        ctx.ellipse(irisX, irisY, pupilR * 1.3, Math.max(7, pupilR * 0.35), 0, 0, Math.PI * 2);
+      } else {
+        ctx.arc(irisX, irisY, pupilR, 0, Math.PI * 2);
+      }
+      ctx.fillStyle = '#05070c';
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(irisX - 16, irisY - 18, 7, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.fill();
+
+      const topLidY = cy - 115 + (upperLid * 160);
+      const botLidY = cy + 115 - (lowerLid * 140);
+
+      ctx.fillStyle = '#000000';
+      ctx.beginPath();
+      ctx.moveTo(cx - 120, cy - 120);
+      ctx.lineTo(cx + 120, cy - 120);
+      ctx.lineTo(cx + 120, topLidY);
+      ctx.quadraticCurveTo(cx, topLidY + 18, cx - 120, topLidY);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(cx - 120, cy + 120);
+      ctx.lineTo(cx + 120, cy + 120);
+      ctx.lineTo(cx + 120, botLidY);
+      ctx.quadraticCurveTo(cx, botLidY - 14, cx - 120, botLidY);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    let frames = 0, lastFpsCheck = Date.now();
+    function animate() {
+      const now = Date.now();
+      if (now - lastSaccade > 2500 + Math.random() * 3000) {
+        targetGazeX = (Math.random() - 0.5) * 45;
+        targetGazeY = (Math.random() - 0.5) * 30;
+        lastSaccade = now;
+      }
+
+      gazeX += (targetGazeX - gazeX) * 0.12;
+      gazeY += (targetGazeY - gazeY) * 0.12;
+      pupilR += (targetPupilR - pupilR) * 0.08;
+
+      renderEye(ctxL, false);
+      renderEye(ctxR, true);
+
+      byId('hudGaze').textContent = `${gazeX.toFixed(1)}, ${gazeY.toFixed(1)}`;
+      byId('hudPupil').textContent = `${pupilR.toFixed(1)} px`;
+
+      frames++;
+      if (now - lastFpsCheck >= 1000) {
+        byId('hudFps').textContent = frames;
+        frames = 0;
+        lastFpsCheck = now;
+      }
+
+      requestAnimationFrame(animate);
+    }
+
+    let isDragging = false;
+    const stage = byId('stageArea');
+    stage.addEventListener('mousedown', e => { isDragging = true; updateGazeFromMouse(e); });
+    window.addEventListener('mousemove', e => { if (isDragging) updateGazeFromMouse(e); });
+    window.addEventListener('mouseup', () => { isDragging = false; targetGazeX = 0; targetGazeY = 0; });
+
+    function updateGazeFromMouse(e) {
+      const rect = stage.getBoundingClientRect();
+      const x = e.clientX - (rect.left + rect.width / 2);
+      const y = e.clientY - (rect.top + rect.height / 2);
+      targetGazeX = Math.max(-45, Math.min(45, x * 0.25));
+      targetGazeY = Math.max(-30, Math.min(30, y * 0.25));
+      lastSaccade = Date.now() + 5000;
+    }
+
+    let lastEventTs = 0;
+    async function syncHardwareAndGateway() {
+      // 1. Fetch live events and status from voice gateway
+      try {
+        const res = await fetch(`http://localhost:8765/api/events?since=${lastEventTs}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.events && data.events.length > 0) {
+            data.events.forEach(ev => {
+              log(`[${ev.source}] ${ev.message}`, ev.level);
+              if (ev.source === 'STT' && ev.message.startsWith('Heard: "')) {
+                const text = ev.message.slice(8, -1);
+                appendTranscript('You', text, 'user');
+              } else if (ev.source === 'TTS' && ev.message.startsWith('JAPA: "')) {
+                const text = ev.message.slice(7, -1);
+                appendTranscript('JAPA', text, 'assistant');
+              } else if (ev.source === 'ESP32' && ev.message.includes('Hardware session closed')) {
+                updateMicBadge(false, false);
+              } else if (ev.source === 'ESP32' && ev.message.includes('listening active')) {
+                updateMicBadge(true, false);
+              }
+            });
+            lastEventTs = data.latest;
+          }
+        }
+      } catch {}
+
+      if (!gatewayAdminToken) {
+        try {
+          const sRes = await fetch('http://localhost:8765/api/status');
+          if (sRes.ok) {
+            const sData = await sRes.json();
+            if (sData.admin_token) gatewayAdminToken = sData.admin_token;
+          }
+        } catch {}
+      }
+
+      // 2. Fetch hardware eye preset and state
+      try {
+        const res = await fetch(`http://${currentIp}:3233/eyes/status`, { cache: 'no-store' });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.left_id !== undefined && data.left_id !== currentPresetIdx) {
+            applyPresetLocal(data.left_id);
+            log(`[SYNC] Hardware touch/button set eyes to #${data.left_id} (${data.left_name})`, 'info');
+          }
+          if (data.scale !== undefined && !isDraggingScale) {
+            const sc = parseFloat(data.scale);
+            byId('valScaleDisplay').textContent = sc.toFixed(2);
+            byId('sliderEyeScale').value = sc.toFixed(2);
+          }
+          if (data.device_state) {
+            const stateStr = data.sleeping ? 'SLEEPING' : data.device_state.toUpperCase();
+            byId('liveStateLabel').textContent = stateStr;
+            updateMicBadge(data.device_state === 'listening', !!data.sleeping);
+          }
+        }
+      } catch {}
+    }
+
+    animate();
+    checkDeviceConnection();
+    setInterval(checkDeviceConnection, 8000);
+    setInterval(syncHardwareAndGateway, 1200);
+  </script>
+</body>
+</html>

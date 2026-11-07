@@ -23,7 +23,9 @@
 
 static const char *TAG = "WifiBoard";
 
-// Connection timeout in seconds
+// Connection timeout in seconds. The Wi-Fi station scans for saved networks and
+// connects to the strongest remembered SSID by RSSI. If no saved network can be
+// reached within this window, the board enters AP config mode.
 static constexpr int CONNECT_TIMEOUT_SEC = 60;
 
 WifiBoard::WifiBoard() {
@@ -88,6 +90,7 @@ void WifiBoard::StartNetwork() {
 
 void WifiBoard::TryWifiConnect() {
     auto& ssid_manager = SsidManager::GetInstance();
+
     bool have_ssid = !ssid_manager.GetSsidList().empty();
 
     if (have_ssid) {

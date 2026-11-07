@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JAPA · Voice control</title><link rel="stylesheet" href="/style.css"><script defer src="/control.js"></script></head>
+<body><main>
+<header><span class="eyebrow">JAFR / DUALEYE COMPANION</span><h1>JAPA<span>voice control</span></h1><p>Same eyes. A choice of conversation.</p></header>
+<div class="notice">DEVELOPMENT ACCEPTANCE · No acoustic barge-in yet. Keep the PC running for Mistral. Xiaozhi remains independent of this gateway.</div>
+<section aria-labelledby="device-heading"><div class="section-title"><span>01</span><h2 id="device-heading">The companion</h2></div>
+<div class="fields"><label>Device Wi-Fi IPv4<input id="device-ip" inputmode="decimal" placeholder="From the serial log or router" autocomplete="off"></label>
+<label>This PC's Wi-Fi IPv4<input id="gateway-ip" inputmode="decimal" placeholder="Used by JAPA to reach Mistral" autocomplete="off"></label></div>
+<button id="connect">Read live device status</button><dl id="device-status"><dt>Device</dt><dd>Not checked</dd></dl>
+<p class="hint">The device's control service is on port 3233, not port 80. A timeout means unavailable, not connected.</p></section>
+<section aria-labelledby="provider-heading"><div class="section-title"><span>02</span><h2 id="provider-heading">Voice provider</h2></div>
+<dl id="provider-status"><dt>Mistral / GPT-Live</dt><dd>Checking gateway configuration…</dd></dl>
+<div class="actions"><button id="verify">Verify Mistral voice chain</button><button id="live-verify">Check GPT-Live configuration</button><button id="live" disabled>Use GPT-Live</button><button id="mistral" disabled>Use Mistral</button><button id="xiaozhi" disabled>Use Xiaozhi</button></div>
+<p class="hint">Mistral verification makes a small real TTS → transcription → chat request. GPT-Live configuration checking does not open a billable voice session. A switch applies only after device-side validation at idle. Previous conversation history is never transferred.</p></section>
+<section aria-labelledby="persona-heading"><div class="section-title"><span>03</span><h2 id="persona-heading">Personality</h2></div>
+<label>Mistral personality<select id="persona"><option value="japa">JAPA — warm & curious</option><option value="calm">Calm — gentle & attentive</option><option value="playful">Playful — lightly mischievous</option></select></label>
+<button id="apply-persona">Apply personality</button><p class="hint">Separate from provider selection. Apply outside a conversation; this clears Mistral session history. Xiaozhi personality remains in its cloud console. Gateway personality resets to JAPA when this host process restarts.</p></section>
+<section><div class="section-title"><span>LIVE</span><h2>Conversation evidence</h2></div><pre id="session-status">No gateway session</pre></section>
+<p id="message" role="status" aria-live="polite">Ready to read actual device status.</p>
+<footer>No API keys are stored in this page. Local administration only. Controls are not an Internet-facing management service.</footer>
+</main></body></html>

@@ -16,6 +16,8 @@
 #include <driver/gpio.h>
 #include <arpa/inet.h>
 #include <font_awesome.h>
+#include <freertos/idf_additions.h>
+#include <esp_heap_caps.h>
 
 #define TAG "Application"
 
@@ -65,25 +67,30 @@ void Application::Initialize() {
     // Setup the display
     auto display = board.GetDisplay();
     display->SetupUI();
-    // Print board name/version info
-    display->SetChatMessage("system", SystemInfo::GetUserAgent().c_str());
+    // Keep the direct-eye display clean during boot. The user-agent string is
+    // still available in logs/status, but rendering it as a tiny bottom overlay
+    // looks like garbage on the round eyes and wastes startup draw work.
 
-    // Setup the audio service
+    // Setup the audio service (bypassed in dedicated graphics mode)
     auto codec = board.GetAudioCodec();
-    audio_service_.Initialize(codec);
-    audio_service_.Start();
+    if (codec && !codec->IsDummy()) {
+        audio_service_.Initialize(codec);
+        audio_service_.Start();
 
-    AudioServiceCallbacks callbacks;
-    callbacks.on_send_queue_available = [this]() {
-        xEventGroupSetBits(event_group_, MAIN_EVENT_SEND_AUDIO);
-    };
-    callbacks.on_wake_word_detected = [this](const std::string& wake_word) {
-        xEventGroupSetBits(event_group_, MAIN_EVENT_WAKE_WORD_DETECTED);
-    };
-    callbacks.on_vad_change = [this](bool speaking) {
-        xEventGroupSetBits(event_group_, MAIN_EVENT_VAD_CHANGE);
-    };
-    audio_service_.SetCallbacks(callbacks);
+        AudioServiceCallbacks callbacks;
+        callbacks.on_send_queue_available = [this]() {
+            xEventGroupSetBits(event_group_, MAIN_EVENT_SEND_AUDIO);
+        };
+        callbacks.on_wake_word_detected = [this](const std::string& wake_word) {
+            xEventGroupSetBits(event_group_, MAIN_EVENT_WAKE_WORD_DETECTED);
+        };
+        callbacks.on_vad_change = [this](bool speaking) {
+            xEventGroupSetBits(event_group_, MAIN_EVENT_VAD_CHANGE);
+        };
+        audio_service_.SetCallbacks(callbacks);
+    } else {
+        ESP_LOGI(TAG, "Dedicated Graphics Mode: Audio service and wake word engine bypassed. All resources dedicated to eye graphics.");
+    }
 
     // Add state change listeners
     state_machine_.AddStateChangeListener([this](DeviceState old_state, DeviceState new_state) {
@@ -182,9 +189,21 @@ void Application::Run() {
         MAIN_EVENT_STATE_CHANGED;
 
     while (true) {
-        auto bits = xEventGroupWaitBits(event_group_, ALL_EVENTS, pdTRUE, pdFALSE, portMAX_DELAY);
+        auto bits = xEventGroupWaitBits(event_group_, ALL_EVENTS, pdTRUE, pdFALSE,
+            playback_completion_pending_ ? pdMS_TO_TICKS(20) : portMAX_DELAY);
+
+        if (playback_completion_pending_ && audio_service_.IsPlaybackIdle()) {
+            playback_completion_pending_ = false;
+            accepting_audio_ = false;
+            if (GetDeviceState() == kDeviceStateSpeaking) {
+                SetDeviceState(listening_mode_ == kListeningModeManualStop ? kDeviceStateIdle : kDeviceStateListening);
+            }
+        }
 
         if (bits & MAIN_EVENT_ERROR) {
+            accepting_audio_ = false;
+            playback_completion_pending_ = false;
+            audio_service_.ResetDecoder();
             SetDeviceState(kDeviceStateIdle);
             Alert(Lang::Strings::ERROR, last_error_message_.c_str(), "circle_xmark", Lang::Sounds::OGG_EXCLAMATION);
         }
@@ -249,6 +268,7 @@ void Application::Run() {
             clock_ticks_++;
             auto display = Board::GetInstance().GetDisplay();
             display->UpdateStatusBar();
+            ApplyPendingVoiceProfile();
         
             // Print debug info every 10 seconds
             if (clock_ticks_ % 10 == 0) {
@@ -260,6 +280,13 @@ void Application::Run() {
 
 void Application::HandleNetworkConnectedEvent() {
     ESP_LOGI(TAG, "Network connected");
+    auto& board = Board::GetInstance();
+    auto codec = board.GetAudioCodec();
+    if (codec && codec->IsDummy()) {
+        ESP_LOGI(TAG, "Dedicated Graphics Mode: Connected to WiFi; skipping voice protocols. Eyes engine active in idle state.");
+        SetDeviceState(kDeviceStateIdle);
+        return;
+    }
     auto state = GetDeviceState();
 
     if (state == kDeviceStateStarting || state == kDeviceStateWifiConfiguring) {
@@ -328,7 +355,13 @@ void Application::ActivationTask() {
     CheckAssetsVersion();
 
     // Check for new firmware version
-    CheckNewVersion();
+    {
+        std::lock_guard<std::mutex> lock(voice_profile_mutex_);
+        active_voice_profile_ = VoiceProfile::Load();
+    }
+    if (active_voice_profile_.profile == "xiaozhi") {
+        CheckNewVersion();
+    }
 
     // Initialize the protocol
     InitializeProtocol();
@@ -470,38 +503,60 @@ void Application::CheckNewVersion() {
     }
 }
 
-void Application::InitializeProtocol() {
+void Application::InitializeProtocol(std::unique_ptr<Protocol> candidate) {
     auto& board = Board::GetInstance();
     auto display = board.GetDisplay();
     auto codec = board.GetAudioCodec();
 
     display->SetStatus(Lang::Strings::LOADING_PROTOCOL);
 
-    if (ota_->HasMqttConfig()) {
+    const auto generation = ++protocol_generation_;
+    if (candidate) {
+        protocol_ = std::move(candidate);
+    } else if (active_voice_profile_.profile == "gateway") {
+        protocol_ = std::make_unique<WebsocketProtocol>(active_voice_profile_.url, active_voice_profile_.token);
+    } else if (ota_ && ota_->HasMqttConfig()) {
         protocol_ = std::make_unique<MqttProtocol>();
-    } else if (ota_->HasWebsocketConfig()) {
+    } else if (ota_ && ota_->HasWebsocketConfig()) {
         protocol_ = std::make_unique<WebsocketProtocol>();
     } else {
         ESP_LOGW(TAG, "No protocol specified in the OTA config, using MQTT");
         protocol_ = std::make_unique<MqttProtocol>();
     }
 
-    protocol_->OnConnected([this]() {
-        DismissAlert();
+    protocol_->OnConnected([this, generation]() {
+        if (generation == protocol_generation_.load()) DismissAlert();
     });
 
-    protocol_->OnNetworkError([this](const std::string& message) {
+    protocol_->OnNetworkError([this, generation](const std::string& message) {
+        if (generation != protocol_generation_.load()) return;
+        bool is_gateway = false;
+        {
+            std::lock_guard<std::mutex> lock(voice_profile_mutex_);
+            is_gateway = (active_voice_profile_.profile == "gateway");
+        }
+        if (is_gateway) {
+            ESP_LOGW(TAG, "Gateway unreachable (%s). Auto-fallback to Xiaozhi cloud workflow", message.c_str());
+            Alert(Lang::Strings::ERROR, "Gateway offline; cloud fallback", "cloud", Lang::Sounds::OGG_EXCLAMATION);
+            Schedule([this, generation]() {
+                if (generation != protocol_generation_.load()) return;
+                std::unique_ptr<Protocol> fallback_proto = std::make_unique<MqttProtocol>();
+                InitializeProtocol(std::move(fallback_proto));
+            });
+            return;
+        }
         last_error_message_ = message;
         xEventGroupSetBits(event_group_, MAIN_EVENT_ERROR);
     });
     
-    protocol_->OnIncomingAudio([this](std::unique_ptr<AudioStreamPacket> packet) {
-        if (GetDeviceState() == kDeviceStateSpeaking) {
+    protocol_->OnIncomingAudio([this, generation](std::unique_ptr<AudioStreamPacket> packet) {
+        if (generation == protocol_generation_.load() && accepting_audio_.load()) {
             audio_service_.PushPacketToDecodeQueue(std::move(packet));
         }
     });
     
-    protocol_->OnAudioChannelOpened([this, codec, &board]() {
+    protocol_->OnAudioChannelOpened([this, codec, &board, generation]() {
+        if (generation != protocol_generation_.load()) return;
         board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
         if (protocol_->server_sample_rate() != codec->output_sample_rate()) {
             ESP_LOGW(TAG, "Server sample rate %d does not match device output sample rate %d, resampling may cause distortion",
@@ -509,56 +564,82 @@ void Application::InitializeProtocol() {
         }
     });
     
-    protocol_->OnAudioChannelClosed([this, &board]() {
+    protocol_->OnAudioChannelClosed([this, &board, generation]() {
+        if (generation != protocol_generation_.load()) return;
+        accepting_audio_ = false;
         board.SetPowerSaveLevel(PowerSaveLevel::LOW_POWER);
-        Schedule([this]() {
+        Schedule([this, generation]() {
+            if (generation != protocol_generation_.load()) return;
+            playback_completion_pending_ = false;
+            audio_service_.ResetDecoder();
             auto display = Board::GetInstance().GetDisplay();
             display->SetChatMessage("system", "");
             SetDeviceState(kDeviceStateIdle);
         });
     });
     
-    protocol_->OnIncomingJson([this, display](const cJSON* root) {
+    protocol_->OnIncomingJson([this, display, generation](const cJSON* root) {
+        if (generation != protocol_generation_.load()) return;
         // Parse JSON data
         auto type = cJSON_GetObjectItem(root, "type");
+        if (!cJSON_IsString(type)) return;
         if (strcmp(type->valuestring, "tts") == 0) {
             auto state = cJSON_GetObjectItem(root, "state");
+            if (!cJSON_IsString(state)) return;
             if (strcmp(state->valuestring, "start") == 0) {
-                Schedule([this]() {
+                audio_service_.ResetDecoder();
+                accepting_audio_ = true;
+                Schedule([this, generation]() {
+                    if (generation != protocol_generation_.load()) return;
                     aborted_ = false;
+                    playback_completion_pending_ = false;
                     SetDeviceState(kDeviceStateSpeaking);
                 });
             } else if (strcmp(state->valuestring, "stop") == 0) {
-                Schedule([this]() {
+                Schedule([this, generation]() {
+                    if (generation != protocol_generation_.load()) return;
                     if (GetDeviceState() == kDeviceStateSpeaking) {
-                        if (listening_mode_ == kListeningModeManualStop) {
-                            SetDeviceState(kDeviceStateIdle);
-                        } else {
-                            SetDeviceState(kDeviceStateListening);
-                        }
+                        playback_completion_pending_ = true;
                     }
                 });
             } else if (strcmp(state->valuestring, "sentence_start") == 0) {
                 auto text = cJSON_GetObjectItem(root, "text");
                 if (cJSON_IsString(text)) {
                     ESP_LOGI(TAG, "<< %s", text->valuestring);
-                    Schedule([display, message = std::string(text->valuestring)]() {
+                    Schedule([this, display, generation, message = std::string(text->valuestring)]() {
+                        if (generation != protocol_generation_.load()) return;
                         display->SetChatMessage("assistant", message.c_str());
                     });
                 }
+            }
+        } else if (strcmp(type->valuestring, "japa_state") == 0) {
+            auto state = cJSON_GetObjectItem(root, "state");
+            bool gateway = false;
+            {
+                std::lock_guard<std::mutex> lock(voice_profile_mutex_);
+                gateway = active_voice_profile_.profile == "gateway";
+            }
+            if (gateway && cJSON_IsString(state)) {
+                Schedule([this, display, generation, state = std::string(state->valuestring)]() {
+                    if (generation != protocol_generation_.load() || GetDeviceState() != kDeviceStateListening) return;
+                    if (state == "thinking") display->SetStatus("Thinking");
+                    else if (state == "listening") display->SetStatus(Lang::Strings::LISTENING);
+                });
             }
         } else if (strcmp(type->valuestring, "stt") == 0) {
             auto text = cJSON_GetObjectItem(root, "text");
             if (cJSON_IsString(text)) {
                 ESP_LOGI(TAG, ">> %s", text->valuestring);
-                Schedule([display, message = std::string(text->valuestring)]() {
+                Schedule([this, display, generation, message = std::string(text->valuestring)]() {
+                    if (generation != protocol_generation_.load()) return;
                     display->SetChatMessage("user", message.c_str());
                 });
             }
         } else if (strcmp(type->valuestring, "llm") == 0) {
             auto emotion = cJSON_GetObjectItem(root, "emotion");
             if (cJSON_IsString(emotion)) {
-                Schedule([display, emotion_str = std::string(emotion->valuestring)]() {
+                Schedule([this, display, generation, emotion_str = std::string(emotion->valuestring)]() {
+                    if (generation != protocol_generation_.load()) return;
                     display->SetEmotion(emotion_str.c_str());
                 });
             }
@@ -573,7 +654,8 @@ void Application::InitializeProtocol() {
                 ESP_LOGI(TAG, "System command: %s", command->valuestring);
                 if (strcmp(command->valuestring, "reboot") == 0) {
                     // Do a reboot if user requests a OTA update
-                    Schedule([this]() {
+                    Schedule([this, generation]() {
+                        if (generation != protocol_generation_.load()) return;
                         Reboot();
                     });
                 } else {
@@ -589,14 +671,41 @@ void Application::InitializeProtocol() {
             } else {
                 ESP_LOGW(TAG, "Alert command requires status, message and emotion");
             }
+        } else if (strcmp(type->valuestring, "speak_request") == 0) {
+            auto session_id = cJSON_GetObjectItem(root, "session_id");
+            if (!cJSON_IsString(session_id)) {
+                ESP_LOGW(TAG, "speak_request requires a session_id");
+                return;
+            }
+
+            std::string preview_text;
+            auto text = cJSON_GetObjectItem(root, "text");
+            if (cJSON_IsString(text)) {
+                preview_text = text->valuestring;
+            }
+
+            Schedule([this, generation,
+                      requested_session_id = std::string(session_id->valuestring),
+                      preview_text = std::move(preview_text)]() {
+                if (generation == protocol_generation_.load()) HandleSpeakRequest(requested_session_id, preview_text);
+            });
 #if CONFIG_RECEIVE_CUSTOM_MESSAGE
         } else if (strcmp(type->valuestring, "custom") == 0) {
             auto payload = cJSON_GetObjectItem(root, "payload");
-            ESP_LOGI(TAG, "Received custom message: %s", cJSON_PrintUnformatted(root));
+            char* root_json = cJSON_PrintUnformatted(root);
+            ESP_LOGI(TAG, "Received custom message: %s", root_json != nullptr ? root_json : "(null)");
+            if (root_json != nullptr) {
+                cJSON_free(root_json);
+            }
             if (cJSON_IsObject(payload)) {
-                Schedule([this, display, payload_str = std::string(cJSON_PrintUnformatted(payload))]() {
-                    display->SetChatMessage("system", payload_str.c_str());
-                });
+                char* payload_json = cJSON_PrintUnformatted(payload);
+                if (payload_json != nullptr) {
+                    Schedule([this, display, generation, payload_str = std::string(payload_json)]() {
+                        if (generation != protocol_generation_.load()) return;
+                        display->SetChatMessage("system", payload_str.c_str());
+                    });
+                    cJSON_free(payload_json);
+                }
             } else {
                 ESP_LOGW(TAG, "Invalid custom message format: missing payload");
             }
@@ -606,7 +715,142 @@ void Application::InitializeProtocol() {
         }
     });
     
-    protocol_->Start();
+    // A validated candidate already has its transport/audio channel established.
+    if (!protocol_->IsAudioChannelOpened()) protocol_->Start();
+}
+
+std::string Application::GetVoiceProfileStatusJson() {
+    std::lock_guard<std::mutex> lock(voice_profile_mutex_);
+    auto* root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "service", "japa_voice_control");
+    cJSON_AddStringToObject(root, "active", active_voice_profile_.profile.c_str());
+    cJSON_AddStringToObject(root, "selected", VoiceProfile::Load().profile.c_str());
+    cJSON_AddStringToObject(root, "pending", voice_profile_pending_ ? pending_voice_profile_.profile.c_str() : "");
+    cJSON_AddStringToObject(root, "last_error", voice_profile_error_.c_str());
+    cJSON_AddStringToObject(root, "device_state", DeviceStateMachine::GetStateName(GetDeviceState()));
+    cJSON_AddBoolToObject(root, "can_switch", GetDeviceState() == kDeviceStateIdle && audio_service_.IsPlaybackIdle());
+    cJSON_AddStringToObject(root, "history_policy", "new provider starts a new session; no history transfer");
+    char* data = cJSON_PrintUnformatted(root);
+    std::string result = data ? data : "{}";
+    cJSON_free(data);
+    cJSON_Delete(root);
+    return result;
+}
+
+bool Application::RequestVoiceProfile(const std::string& profile, const std::string& url,
+                                     const std::string& token, std::string& error) {
+    VoiceProfile request{profile, url, token};
+    if (!request.Valid()) {
+        error = "Choose xiaozhi or a gateway /xiaozhi/v1 URL with a pairing token (16-256 characters)";
+        return false;
+    }
+    std::lock_guard<std::mutex> lock(voice_profile_mutex_);
+    if (voice_profile_pending_) {
+        error = "A profile change is already pending";
+        return false;
+    }
+    if (request.profile == active_voice_profile_.profile && request.url == active_voice_profile_.url &&
+        request.token == active_voice_profile_.token) {
+        voice_profile_error_.clear();
+        return true; // Do not connect a duplicate MQTT client for a no-op selection.
+    }
+    pending_voice_profile_ = request;
+    voice_profile_pending_ = true;
+    voice_profile_error_.clear();
+    return true;
+}
+
+void Application::ApplyPendingVoiceProfile() {
+    if (GetDeviceState() != kDeviceStateIdle || !audio_service_.IsPlaybackIdle() || !protocol_) return;
+    VoiceProfile requested;
+    std::unique_ptr<Protocol> candidate;
+    {
+        std::lock_guard<std::mutex> lock(voice_profile_mutex_);
+        if (!voice_profile_pending_) return;
+        requested = pending_voice_profile_;
+        if (!voice_profile_probe_running_) {
+            voice_profile_probe_running_ = true;
+            voice_profile_probe_done_ = false;
+            // A slow/failed provider must never block the main interaction loop.
+            const auto created = xTaskCreateWithCaps([](void* arg) {
+              { // Release C++ owners before FreeRTOS deletes this task (no stack unwinding).
+                auto* app = static_cast<Application*>(arg);
+                VoiceProfile request;
+                {
+                    std::lock_guard<std::mutex> lock(app->voice_profile_mutex_);
+                    request = app->pending_voice_profile_;
+                }
+                std::unique_ptr<Protocol> checked;
+                bool valid = false;
+                if (request.profile == "gateway") {
+                    auto gateway = std::make_unique<WebsocketProtocol>(request.url, request.token);
+                    valid = gateway->OpenAudioChannel() && gateway->IsGatewayReady();
+                    checked = std::move(gateway);
+                } else {
+                    checked = std::make_unique<MqttProtocol>();
+                    valid = checked->Start() && checked->OpenAudioChannel();
+                }
+                if (!valid) checked.reset();
+                {
+                    std::lock_guard<std::mutex> lock(app->voice_profile_mutex_);
+                    app->voice_profile_candidate_ = std::move(checked);
+                    app->voice_profile_probe_done_ = true;
+                }
+              }
+                vTaskDeleteWithCaps(nullptr);
+            // Provider validation can touch NVS/flash while caches are disabled.
+            // A PSRAM-backed task stack is illegal in that window on ESP32-S3 and
+            // trips esp_task_stack_is_sane_cache_disabled(). Keep this short-lived
+            // control task entirely in internal 8-bit RAM; audio/history buffers
+            // remain explicitly PSRAM-backed elsewhere.
+            }, "voice_probe", 12288, this, 2, nullptr, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+            if (created != pdPASS) {
+                voice_profile_probe_running_ = false;
+                voice_profile_pending_ = false;
+                voice_profile_error_ = "Insufficient memory to validate provider; current profile retained";
+            }
+            return;
+        }
+        if (!voice_profile_probe_done_) return;
+        candidate = std::move(voice_profile_candidate_);
+        voice_profile_probe_running_ = false;
+        voice_profile_probe_done_ = false;
+    }
+    if (!candidate || !candidate->IsAudioChannelOpened()) {
+        std::lock_guard<std::mutex> lock(voice_profile_mutex_);
+        voice_profile_pending_ = false;
+        voice_profile_error_ = "Candidate connection/readiness failed; previous profile retained";
+        return;
+    }
+    const auto interaction = MAIN_EVENT_WAKE_WORD_DETECTED | MAIN_EVENT_START_LISTENING | MAIN_EVENT_TOGGLE_CHAT;
+    if (GetDeviceState() != kDeviceStateIdle || (xEventGroupGetBits(event_group_) & interaction)) {
+        return;  // user began interacting while the candidate was being checked
+    }
+    if (!requested.Save()) {
+        std::lock_guard<std::mutex> lock(voice_profile_mutex_);
+        voice_profile_pending_ = false;
+        voice_profile_error_ = "Could not save profile; previous transport retained";
+        return;
+    }
+    ++protocol_generation_;  // discard callbacks from the old session
+    protocol_->OnAudioChannelClosed(nullptr);
+    protocol_->OnIncomingAudio(nullptr);
+    protocol_->OnIncomingJson(nullptr);
+    protocol_->OnNetworkError(nullptr);
+    protocol_->CloseAudioChannel();
+    protocol_.reset();
+    accepting_audio_ = false;
+    playback_completion_pending_ = false;
+    audio_service_.ResetDecoder();
+    while (audio_service_.PopPacketFromSendQueue()) {}
+    {
+        std::lock_guard<std::mutex> lock(voice_profile_mutex_);
+        active_voice_profile_ = requested;
+        voice_profile_pending_ = false;
+        voice_profile_error_.clear();
+    }
+    InitializeProtocol(std::move(candidate));
+    DismissAlert();
 }
 
 void Application::ShowActivationCode(const std::string& code, const std::string& message) {
@@ -800,6 +1044,7 @@ void Application::HandleWakeWordDetectedEvent() {
             return;
         }
         // Channel already opened, continue directly
+        SetDeviceState(kDeviceStateConnecting);
         ContinueWakeWordInvoke(wake_word);
     } else if (state == kDeviceStateSpeaking || state == kDeviceStateListening) {
         AbortSpeaking(kAbortReasonWakeWordDetected);
@@ -820,6 +1065,55 @@ void Application::HandleWakeWordDetectedEvent() {
     } else if (state == kDeviceStateActivating) {
         // Restart the activation check if the wake word is detected during activation
         SetDeviceState(kDeviceStateIdle);
+    }
+}
+
+void Application::HandleSpeakRequest(const std::string& requested_session_id, const std::string& preview_text) {
+    if (!protocol_) {
+        ESP_LOGW(TAG, "Ignoring speak_request: protocol is not initialized");
+        return;
+    }
+
+    auto state = GetDeviceState();
+    if (state != kDeviceStateIdle) {
+        ESP_LOGI(TAG, "Ignoring speak_request while state=%d", (int)state);
+        return;
+    }
+
+    if (!preview_text.empty()) {
+        auto display = Board::GetInstance().GetDisplay();
+        display->SetChatMessage("assistant", preview_text.c_str());
+    }
+
+    SetDeviceState(kDeviceStateConnecting);
+    Schedule([this, requested_session_id]() {
+        ContinueSpeakRequest(requested_session_id);
+    });
+}
+
+void Application::ContinueSpeakRequest(const std::string& requested_session_id) {
+    if (GetDeviceState() != kDeviceStateConnecting) {
+        return;
+    }
+
+    auto& board = Board::GetInstance();
+    board.SetPowerSaveLevel(PowerSaveLevel::PERFORMANCE);
+
+    if (!protocol_->IsAudioChannelOpened()) {
+        if (!protocol_->OpenAudioChannel()) {
+            ESP_LOGW(TAG, "Failed to open audio channel for speak_request");
+            SetDeviceState(kDeviceStateIdle);
+            return;
+        }
+    }
+
+    if (!protocol_->SendNatActivationPackets()) {
+        ESP_LOGW(TAG, "Failed to send NAT activation packets for speak_request");
+    }
+
+    SetDeviceState(kDeviceStateSpeaking);
+    if (!protocol_->SendSpeakReady(requested_session_id)) {
+        ESP_LOGW(TAG, "Failed to send speak_ready response");
     }
 }
 
@@ -919,7 +1213,6 @@ void Application::HandleStateChangedEvent() {
                 // Only AFE wake word can be detected in speaking mode
                 audio_service_.EnableWakeWordDetection(audio_service_.IsAfeWakeWord());
             }
-            audio_service_.ResetDecoder();
             break;
         case kDeviceStateWifiConfiguring:
             audio_service_.EnableVoiceProcessing(false);
@@ -942,6 +1235,9 @@ void Application::Schedule(std::function<void()>&& callback) {
 void Application::AbortSpeaking(AbortReason reason) {
     ESP_LOGI(TAG, "Abort speaking");
     aborted_ = true;
+    accepting_audio_ = false;
+    playback_completion_pending_ = false;
+    audio_service_.ResetDecoder();
     if (protocol_) {
         protocol_->SendAbortSpeaking(reason);
     }
@@ -1120,6 +1416,10 @@ void Application::PlaySound(const std::string_view& sound) {
 
 void Application::ResetProtocol() {
     Schedule([this]() {
+        ++protocol_generation_;
+        accepting_audio_ = false;
+        playback_completion_pending_ = false;
+        audio_service_.ResetDecoder();
         // Close audio channel if opened
         if (protocol_ && protocol_->IsAudioChannelOpened()) {
             protocol_->CloseAudioChannel();
